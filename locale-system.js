@@ -21,7 +21,7 @@
       monthly_price_range: '$39',
       currency_label: 'USD',
       price_qualifier_kit: 'USD · one-time',
-      price_qualifier_monthly: 'USD/mo',
+      price_qualifier_monthly: 'USD per month',
 
       // Spelling
       optimization_word: 'Optimization',
@@ -65,7 +65,7 @@
       monthly_price_range: '£29',
       currency_label: 'GBP',
       price_qualifier_kit: 'GBP · one-time',
-      price_qualifier_monthly: 'GBP/mo',
+      price_qualifier_monthly: 'GBP per month',
 
       optimization_word: 'Optimisation',
       optimization_word_lower: 'optimisation',
@@ -104,7 +104,7 @@
       monthly_price_range: '$49',
       currency_label: 'AUD',
       price_qualifier_kit: 'AUD · one-time',
-      price_qualifier_monthly: 'AUD/mo',
+      price_qualifier_monthly: 'AUD per month',
 
       optimization_word: 'Optimisation',
       optimization_word_lower: 'optimisation',
@@ -143,7 +143,7 @@
       monthly_price_range: '$49',
       currency_label: 'NZD',
       price_qualifier_kit: 'NZD · one-time',
-      price_qualifier_monthly: 'NZD/mo',
+      price_qualifier_monthly: 'NZD per month',
 
       optimization_word: 'Optimisation',
       optimization_word_lower: 'optimisation',
