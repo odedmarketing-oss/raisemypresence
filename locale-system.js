@@ -141,9 +141,9 @@
       monthly_price: '$49/mo',
       kit_price_range: '$99',
       monthly_price_range: '$49',
-      currency_label: 'AUD',
-      price_qualifier_kit: 'AUD · one-time',
-      price_qualifier_monthly: 'AUD/mo',
+      currency_label: 'NZD',
+      price_qualifier_kit: 'NZD · one-time',
+      price_qualifier_monthly: 'NZD/mo',
 
       optimization_word: 'Optimisation',
       optimization_word_lower: 'optimisation',
@@ -169,9 +169,9 @@
 
       tier_kit_heading: 'Optimisation Kit',
       tier_kit_price_display: '$99',
-      tier_kit_price_qualifier: 'AUD',
+      tier_kit_price_qualifier: 'NZD',
       tier_monthly_price_display: '$49',
-      tier_monthly_price_qualifier: 'AUD/mo',
+      tier_monthly_price_qualifier: 'NZD/mo',
       tier_kit_cta: 'Get the Kit'
     }
   };
