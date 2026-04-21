@@ -40,7 +40,7 @@ from website_discoverer import discover_website
 from email_extractor import extract_emails
 from email_validator import validate_email
 from emailer import send_report
-from report_generator import generate_report, recompute_score
+from report_generator import generate_report, generate_subject, detect_locale, recompute_score
 
 logger = logging.getLogger("pipeline")
 
@@ -182,7 +182,9 @@ def process_business(business: dict, dry_run: bool) -> dict:
     result["email"] = target_email
 
     # --- Step 4: Generate report ---
-    html_report = generate_report(business, recipient_email=target_email)
+    locale = detect_locale(business.get("address", ""))
+    html_report = generate_report(business, recipient_email=target_email, locale=locale)
+    subject = generate_subject(score, locale=locale)
 
     # --- Step 5: Send ---
     send_result = send_report(
@@ -191,6 +193,7 @@ def process_business(business: dict, dry_run: bool) -> dict:
         business_name=name,
         score=score,
         dry_run=dry_run,
+        subject=subject,
     )
 
     if send_result["success"]:
@@ -364,6 +367,10 @@ def main():
         "--verbose", "-v", action="store_true",
         help="Enable debug logging"
     )
+    parser.add_argument(
+        "--yes", "-y", action="store_true",
+        help="Skip interactive confirmation prompt for LIVE mode (for cron/automation)"
+    )
 
     args = parser.parse_args()
 
@@ -385,10 +392,13 @@ def main():
 
     if not dry_run:
         logger.warning("⚠️  LIVE MODE — emails will be sent to real businesses")
-        response = input("Type 'confirm' to proceed: ")
-        if response.strip().lower() != "confirm":
-            logger.info("Aborted by user.")
-            sys.exit(0)
+        if args.yes:
+            logger.info("Auto-confirmed via --yes flag (cron/automation mode).")
+        else:
+            response = input("Type 'confirm' to proceed: ")
+            if response.strip().lower() != "confirm":
+                logger.info("Aborted by user.")
+                sys.exit(0)
 
     # --- Run ---
     summary = run_pipeline(
