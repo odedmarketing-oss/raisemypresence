@@ -1,0 +1,18 @@
+# Raise My Presence — Outreach Pipeline Dependencies
+# Install: pip install -r requirements.txt
+
+# Core
+python-dotenv          # .env auto-loading (config.py)
+requests               # HTTP client (website discoverer, email extractor)
+
+# Email
+sendgrid               # SendGrid API client (emailer.py)
+email-validator        # RFC 5322 syntax + deliverability (email_validator.py)
+dnspython              # MX record lookup (email_validator.py)
+
+# Parsing
+beautifulsoup4         # HTML parsing for email extraction (email_extractor.py)
+
+# Webhook server
+fastapi                # Webhook endpoints (webhook_server.py)
+uvicorn                # ASGI server for FastAPI (webhook_server.py)

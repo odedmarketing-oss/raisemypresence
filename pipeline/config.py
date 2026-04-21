@@ -8,6 +8,7 @@ Loaded by every other pipeline module.
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -15,6 +16,12 @@ from pathlib import Path
 PIPELINE_DIR = Path(__file__).parent
 DB_PATH = PIPELINE_DIR / "pipeline.db"
 SCAN_DIR = Path("/root/audit-scanner")
+
+# ---------------------------------------------------------------------------
+# Auto-load .env from pipeline directory
+# Replaces manual `source .env && export SENDGRID_API_KEY` step
+# ---------------------------------------------------------------------------
+load_dotenv(PIPELINE_DIR / ".env")
 
 # ---------------------------------------------------------------------------
 # SendGrid
