@@ -74,7 +74,7 @@ while IFS= read -r f; do
     SCAN_FILE="$f"
     break
   fi
-done < <(ls -t "$OUTPUT_DIR"/*.json 2>/dev/null)
+done < <(ls -t "$OUTPUT_DIR"/scan_results_*.json 2>/dev/null)
 
 if [[ -z "$SCAN_FILE" ]]; then
   echo "[ERROR] No scan file found matching market '$MARKET' (pattern: '$PATTERN')" | tee -a "$LOG_FILE" >&2
