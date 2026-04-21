@@ -32,9 +32,9 @@ CAP="$2"
 
 # --- Argument validation ---
 case "$MARKET" in
-  uk) PATTERN="United Kingdom" ;;
-  us) PATTERN="USA" ;;
-  au) PATTERN="Australia" ;;
+  uk) PATTERN=', UK"' ;;
+  us) PATTERN=', USA"' ;;
+  au) PATTERN=', Australia"' ;;
   *)
     echo "Usage: $0 <uk|us|au> <cap>" >&2
     exit 64
@@ -70,7 +70,7 @@ LOG_FILE="$LOG_DIR/${MARKET}-$(date -u +%Y-%m-%d).log"
 # Iterate newest-first, return first file whose contents contain the market pattern
 SCAN_FILE=""
 while IFS= read -r f; do
-  if grep -q "$PATTERN" "$f" 2>/dev/null; then
+  if grep -qF "$PATTERN" "$f" 2>/dev/null; then
     SCAN_FILE="$f"
     break
   fi
