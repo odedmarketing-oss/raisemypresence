@@ -162,15 +162,15 @@ def recompute_score(breakdown: dict) -> int:
 def _score_color(score: int) -> str:
     if score < 50:
         return "#DC2626"
-    elif score < 70:
-        return "#D97706"
+    elif score < 90:
+        return "#EAB308"
     return "#16A34A"
 
 
 def _score_label(score: int) -> str:
     if score < 50:
         return "Needs Significant Work"
-    elif score < 70:
+    elif score < 90:
         return "Needs Improvement"
     return "Good"
 
@@ -179,20 +179,23 @@ def _factor_status(earned: int, maximum: int) -> tuple:
     """Returns (pill_text, pill_bg, pill_color)."""
     if earned == 0:
         return "Missing",    "#FEE2E2", "#DC2626"
-    elif earned < maximum:
-        return "Incomplete", "#FEF3C7", "#D97706"
-    return "Complete",       "#DCFCE7", "#16A34A"
+    if earned >= maximum:
+        return "Complete",   "#DCFCE7", "#16A34A"
+    pct = earned / maximum * 100 if maximum else 0
+    if pct < 50:
+        return "Low",        "#FEE2E2", "#DC2626"
+    return "Incomplete",     "#FEF3C7", "#EAB308"
 
 
 def _bar_color(earned: int, maximum: int) -> str:
     if earned == 0:
         return "#E5E7EB"
+    if earned >= maximum:
+        return "#16A34A"
     pct = earned / maximum * 100 if maximum else 0
     if pct < 50:
         return "#DC2626"
-    elif pct < 70:
-        return "#D97706"
-    return "#16A34A"
+    return "#EAB308"
 
 
 # ---------------------------------------------------------------------------
