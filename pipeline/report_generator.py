@@ -83,6 +83,7 @@ LOCALES = {
         "credibility": "BBB-aligned business practices",
         "compliance": "CAN-SPAM compliant",
         "compliance_law": "CAN-SPAM Act",
+        "data_source_disclosure": "We obtained your business contact details from publicly available sources, including the Google Places API and your business website. This message is sent in accordance with the CAN-SPAM Act. You can opt out at any time using the Unsubscribe link below.",
     },
     "UK": {
         "optimised": "optimised",
@@ -93,6 +94,7 @@ LOCALES = {
         "credibility": "Trading Standards compliant practices",
         "compliance": "GDPR &amp; PECR compliant",
         "compliance_law": "GDPR &amp; PECR",
+        "data_source_disclosure": "GDPR Article 14 Notice. We obtained your business contact information from the Google Places API (a publicly available source) and your business website. The legal basis for processing is legitimate interest (UK GDPR Art. 6(1)(f)) for B2B marketing under PECR. You may exercise data subject rights, including erasure and objection, by emailing hello@raisemypresence.com. Opt out at any time using the link below.",
     },
     "AU": {
         "optimised": "optimised",
@@ -103,6 +105,7 @@ LOCALES = {
         "credibility": "ACCC-aligned business practices",
         "compliance": "Spam Act 2003 compliant",
         "compliance_law": "Australian Spam Act 2003",
+        "data_source_disclosure": "We obtained your business contact information from publicly available sources, including the Google Places API and your business website. This message is sent in accordance with the Australian Spam Act 2003. You can opt out at any time using the Unsubscribe link below.",
     },
     "NZ": {
         "optimised": "optimised",
@@ -113,6 +116,7 @@ LOCALES = {
         "credibility": "Commerce Commission compliant practices",
         "compliance": "Unsolicited Electronic Messages Act 2007 compliant",
         "compliance_law": "NZ Unsolicited Electronic Messages Act 2007",
+        "data_source_disclosure": "We obtained your business contact information from publicly available sources, including the Google Places API and your business website. This message is sent in accordance with the Unsolicited Electronic Messages Act 2007. You can opt out at any time using the Unsubscribe link below.",
     },
 }
 
@@ -620,11 +624,23 @@ def generate_report(business: dict, recipient_email: str = "", locale: str = "US
                     <!-- ============ FOOTER ============ -->
                     <tr>
                         <td style="padding:24px 40px;text-align:center;border-top:1px solid #F3F4F6;" class="mobile-pad">
+                            <!-- Sender entity + physical address (CAN-SPAM / PECR / Spam Act / UEM Act) -->
                             <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;color:#9CA3AF;line-height:1.8;">
-                                &#169; 2026 Raise My Presence &#183;
-                                <a href="mailto:hello@raisemypresence.com" style="color:#9CA3AF;text-decoration:underline;">hello@raisemypresence.com</a><br>
-                                You received this because your business was identified in a public Google Maps audit.
-                                {loc['compliance']}.<br>
+                                <strong style="color:#6B7280;">Raise My Presence</strong>, a trading name of <strong style="color:#6B7280;">W2M LIMITED</strong> (Hong Kong BR No. 73732216)<br>
+                                2301 Bayfield Building, 99 Hennessy Road, Wan Chai, Hong Kong<br>
+                                <a href="mailto:hello@raisemypresence.com" style="color:#9CA3AF;text-decoration:underline;">hello@raisemypresence.com</a>
+                            </div>
+                            <!-- Divider -->
+                            <div style="margin:14px 0;border-top:1px solid #F3F4F6;"></div>
+                            <!-- Data source disclosure (locale-specific transparency block) -->
+                            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#9CA3AF;line-height:1.6;text-align:left;">
+                                {loc['data_source_disclosure']}
+                            </div>
+                            <!-- Divider -->
+                            <div style="margin:14px 0;border-top:1px solid #F3F4F6;"></div>
+                            <!-- Compliance citation + unsubscribe -->
+                            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;color:#9CA3AF;line-height:1.8;text-align:center;">
+                                &#169; 2026 Raise My Presence &#183; {loc['compliance']}<br>
                                 <a href="{unsub_url}" style="color:#9CA3AF;text-decoration:underline;">Unsubscribe</a>
                             </div>
                         </td>
@@ -744,6 +760,22 @@ if __name__ == "__main__":
     assert "optimised description" in nz_html
     assert "Unsolicited Electronic Messages Act 2007" in nz_html
 
+    # --- Compliance footer tests (CAN-SPAM / PECR / Spam Act / UEM Act + UK GDPR Art 14) ---
+    # All 4 locales: W2M entity + HK address + Google Places data source disclosure
+    for loc_html, loc_code in [(us_html, "US"), (uk_html, "UK"), (au_html, "AU"), (nz_html, "NZ")]:
+        assert "W2M LIMITED" in loc_html, f"{loc_code}: missing W2M LIMITED entity attribution"
+        assert "Bayfield Building" in loc_html, f"{loc_code}: missing physical postal address"
+        assert "Google Places" in loc_html, f"{loc_code}: missing data source disclosure"
+
+    # UK only: GDPR Article 14 notice + UK GDPR Art. 6(1)(f) legal basis citation
+    assert "GDPR Article 14 Notice" in uk_html
+    assert "Art. 6(1)(f)" in uk_html
+
+    # US/AU/NZ should NOT carry GDPR Article 14 framing (jurisdiction-inappropriate)
+    assert "GDPR Article 14" not in us_html
+    assert "GDPR Article 14" not in au_html
+    assert "GDPR Article 14" not in nz_html
+
     # --- Empty google_maps_url test ---
     no_maps_sample = {
         "name": "No Maps Business",
@@ -767,5 +799,6 @@ if __name__ == "__main__":
     print(f"Subject lines verified")
     print(f"Locale detection verified (US/UK/AU/NZ + fallbacks)")
     print(f"Locale outputs verified (spelling + compliance)")
+    print(f"Compliance footer verified (W2M attribution + HK address + Art 14 UK-only)")
     print(f"Empty google_maps_url verified")
     print(f"4 locale previews: /tmp/sample_report_v3_{{US,UK,AU,NZ}}.html")
