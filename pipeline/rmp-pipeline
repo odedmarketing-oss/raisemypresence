@@ -20,9 +20,19 @@
 #   US batch adds 10  → cap at 15
 #   AU batch adds 5   → cap at 20     [paused — see above]
 #
+# Volume-floor monitoring (added RMP #26, 2026-05-08):
+#   Daily check at 14:00 UTC (1hr after US run completes). Fires SendGrid
+#   alert if rolling 7-day US send volume drops below 50% of expected
+#   (cap × days = 15 × 7 = 105 expected; floor = 52). Catches inventory
+#   exhaustion, cascade failure, or silent cron failures earlier than
+#   manual audit cadence (~9 days earlier per Apr 26 incident analysis).
+#   Implementation: alert_on_failure.py --mode volume-floor
+#
 # MAILTO="" disables cron's default mail-on-output behavior.
 # All alerts dispatched explicitly via alert_on_failure.py.
-# Logs written to /var/log/rmp-cron/<market>-<YYYY-MM-DD>.log via tee in run_market.sh.
+# Logs:
+#   Per-market send runs: /var/log/rmp-cron/<market>-<YYYY-MM-DD>.log (via tee in run_market.sh)
+#   Volume-floor checks:  /var/log/rmp-cron/volume-floor.log (rolling, no date)
 #
 # Rollback: comment out the three send lines and reinstall.
 # Full removal: rm /etc/cron.d/rmp-pipeline on Tencent.
@@ -36,3 +46,6 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # 0 8  * * * root /root/audit-scanner/pipeline/run_market.sh uk 5  >/dev/null 2>&1   # PAUSED 2026-05-08 RMP #26 — US-only focus
 0 13 * * * root /root/audit-scanner/pipeline/run_market.sh us 15 >/dev/null 2>&1
 # 0 22 * * * root /root/audit-scanner/pipeline/run_market.sh au 20 >/dev/null 2>&1   # PAUSED 2026-05-08 RMP #26 — US-only focus
+
+# Volume-floor monitoring — daily check at 14:00 UTC (1hr post-US-run)
+0 14 * * * root python3 /root/audit-scanner/pipeline/alert_on_failure.py --mode volume-floor --market us --cap 15 >>/var/log/rmp-cron/volume-floor.log 2>&1
