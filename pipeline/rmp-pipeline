@@ -6,14 +6,19 @@
 # Never edit /etc/cron.d/rmp-pipeline directly on Tencent.
 #
 # Schedule (UTC — each line hits ~9 AM local in the target market):
-#   UK  08:00 UTC → 09:00 BST
+#   UK  08:00 UTC → 09:00 BST           [PAUSED 2026-05-08 — RMP #26]
 #   US  13:00 UTC → 09:00 Eastern / 08:00 Central
-#   AU  22:00 UTC → 08:00 Sydney (next local morning, same UTC day)
+#   AU  22:00 UTC → 08:00 Sydney (next local morning, same UTC day)  [PAUSED 2026-05-08 — RMP #26]
+#
+# US-only focus locked RMP #26 (2026-05-08). UK + AU paused pending US
+# extraction validation (cascade fix + first-sale conversion). Re-enable
+# triggers + plan logged in next-session-tasks.md.
+# NZ: never wired up. To be added post-validation.
 #
 # Caps are cumulative across markets via UTC-date filter in pipeline.py:
-#   UK batch adds 5   → cap at 5
+#   UK batch adds 5   → cap at 5      [paused — see above]
 #   US batch adds 10  → cap at 15
-#   AU batch adds 5   → cap at 20  (global daily ceiling)
+#   AU batch adds 5   → cap at 20     [paused — see above]
 #
 # MAILTO="" disables cron's default mail-on-output behavior.
 # All alerts dispatched explicitly via alert_on_failure.py.
@@ -28,6 +33,6 @@
 MAILTO=""
 PATH=/usr/local/bin:/usr/bin:/bin
 
-0 8  * * * root /root/audit-scanner/pipeline/run_market.sh uk 5  >/dev/null 2>&1
+# 0 8  * * * root /root/audit-scanner/pipeline/run_market.sh uk 5  >/dev/null 2>&1   # PAUSED 2026-05-08 RMP #26 — US-only focus
 0 13 * * * root /root/audit-scanner/pipeline/run_market.sh us 15 >/dev/null 2>&1
-0 22 * * * root /root/audit-scanner/pipeline/run_market.sh au 20 >/dev/null 2>&1
+# 0 22 * * * root /root/audit-scanner/pipeline/run_market.sh au 20 >/dev/null 2>&1   # PAUSED 2026-05-08 RMP #26 — US-only focus
