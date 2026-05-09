@@ -95,16 +95,29 @@ def check_scan_delay(scan_path: str, delay_hours: int) -> bool:
 # ---------------------------------------------------------------------------
 
 def filter_businesses(businesses: list[dict], threshold: int) -> list[dict]:
-    """Filter to businesses below score threshold."""
+    """Filter to businesses with a website AND score below threshold.
+
+    has_website is mandatory: the pipeline reaches businesses via email scraped
+    from their website. No website = unreachable. Dropping here avoids wasting
+    cycles in the discovery cascade (which was failing 100% on locale-blind AU
+    directories + Google CAPTCHA — see RMP #28, May 2026).
+    """
     filtered = []
+    no_website = 0
+    above_threshold = 0
     for biz in businesses:
+        if not biz.get("has_website"):
+            no_website += 1
+            continue
         breakdown = biz.get("score_breakdown", {})
         score = recompute_score(breakdown)
-        if score < threshold:
-            filtered.append(biz)
+        if score >= threshold:
+            above_threshold += 1
+            continue
+        filtered.append(biz)
     logger.info(
-        f"Filtered: {len(filtered)}/{len(businesses)} businesses "
-        f"below score threshold {threshold}"
+        f"Filtered: {len(filtered)}/{len(businesses)} pass "
+        f"(dropped {no_website} no_website, {above_threshold} score>={threshold})"
     )
     return filtered
 
