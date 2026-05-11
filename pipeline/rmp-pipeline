@@ -43,6 +43,14 @@
 MAILTO=""
 PATH=/usr/local/bin:/usr/bin:/bin
 
+# ─── Scanner (RMP #29, added 2026-05-11) ───────────────────────────
+# Daily town discovery at 03:00 server local (10hr before US pipeline).
+# Reads queue → Places API → writes scan_results_*.json to output/.
+# Cost: ~$1.60/day. Queue burn: 1000 towns ÷ 10/day = 100 days.
+# Initially commented OUT — uncomment after pipeline confirms pickup of
+# today's smoke-test output (scan_results_20260511_130651.json).
+# 0 3 * * * root cd /root/audit-scanner && set -a; source pipeline/.env; set +a; python3 scanner.py --queue --market us --batch-size 10 >> /var/log/rmp-cron/scanner-us.log 2>&1
+
 # 0 8  * * * root /root/audit-scanner/pipeline/run_market.sh uk 5  >/dev/null 2>&1   # PAUSED 2026-05-08 RMP #26 — US-only focus
 0 13 * * * root /root/audit-scanner/pipeline/run_market.sh us 15 >/dev/null 2>&1
 # 0 22 * * * root /root/audit-scanner/pipeline/run_market.sh au 20 >/dev/null 2>&1   # PAUSED 2026-05-08 RMP #26 — US-only focus
