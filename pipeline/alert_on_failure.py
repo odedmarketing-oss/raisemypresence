@@ -55,13 +55,17 @@ ALERT_SENDER = "hello@mail.raisemypresence.com"
 ALERT_SENDER_NAME = "RMP Pipeline Monitor"
 LOG_TAIL_LINES = 20
 
-# UTC hour bands per market — sent_log has no locale column, so locale is
-# inferred from sent_at hour band per RMP convention.
-# Each cron fires at 9 AM local; sends typically complete within ~1 hour.
+# Server-local hour bands per market — sent_log stores UTC ISO 8601;
+# queries convert UTC→server-local (+8h) before hour extraction. Cron
+# schedules in /etc/cron.d/rmp-pipeline are also server-local.
+# Bug fix RMP #29 (2026-05-11): pre-fix queries used raw UTC strftime,
+# which missed all sends (US 13:00 server local = 05:00 UTC = outside
+# the 12-14 band). Always wrap sent_at as datetime(sent_at, '+8 hours')
+# before strftime('%H', ...) extraction.
 MARKET_HOUR_BANDS = {
-    "uk": (7, 9),    # 08:00 UTC fire → sends in 07-09 UTC band
-    "us": (12, 14),  # 13:00 UTC fire → sends in 12-14 UTC band
-    "au": (21, 23),  # 22:00 UTC fire → sends in 21-23 UTC band
+    "uk": (7, 9),    # 08:00 server local fire → 07-09 band
+    "us": (12, 14),  # 13:00 server local fire → 12-14 band
+    "au": (21, 23),  # 22:00 server local fire → 21-23 band
 }
 
 # Volume-floor defaults (operator override via CLI flags)
@@ -181,23 +185,25 @@ def query_market_sends_window(market: str, days: int) -> tuple[int, list[tuple[s
         cur = conn.cursor()
 
         # Total count over window
+        # Hour band is server-local; sent_at stored UTC → wrap with +8h
         cur.execute(
             f"""
             SELECT COUNT(*) FROM sent_log
             WHERE sent_at >= datetime('now', '-{int(days)} days')
-              AND CAST(strftime('%H', sent_at) AS INT) BETWEEN ? AND ?
+              AND CAST(strftime('%H', datetime(sent_at, '+8 hours')) AS INT) BETWEEN ? AND ?
             """,
             (h_lo, h_hi),
         )
         total = cur.fetchone()[0]
 
         # Daily breakdown (most recent first)
+        # DATE + hour band both server-local; sent_at stored UTC → wrap with +8h
         cur.execute(
             f"""
-            SELECT DATE(sent_at) AS day, COUNT(*) AS sends
+            SELECT DATE(datetime(sent_at, '+8 hours')) AS day, COUNT(*) AS sends
             FROM sent_log
             WHERE sent_at >= datetime('now', '-{int(days)} days')
-              AND CAST(strftime('%H', sent_at) AS INT) BETWEEN ? AND ?
+              AND CAST(strftime('%H', datetime(sent_at, '+8 hours')) AS INT) BETWEEN ? AND ?
             GROUP BY day
             ORDER BY day DESC
             """,
