@@ -34,6 +34,7 @@ Exit codes:
 """
 
 import argparse
+import json
 import logging
 import os
 import sqlite3
@@ -287,6 +288,138 @@ invoked daily via /etc/cron.d/rmp-pipeline.
     return dispatch_alert(subject, body)
 
 
+# --- Scanner alert modes (RMP #29) ---
+
+def _parse_detail(detail_json: str) -> dict:
+    """Parse the --detail JSON string. Return {} on error or empty input."""
+    if not detail_json:
+        return {}
+    try:
+        d = json.loads(detail_json)
+        return d if isinstance(d, dict) else {}
+    except Exception as e:
+        logger.warning(f"Failed to parse --detail JSON: {e}")
+        return {}
+
+
+def run_scan_failure_mode(market: str, detail_json: str) -> int:
+    """Scanner failed (API issue, queue corruption, etc.). Dispatch alert."""
+    detail = _parse_detail(detail_json)
+    reason = detail.get("reason", "unknown")
+    error = detail.get("error", "(no error message)")
+    batch_start = detail.get("batch_start")
+    batch_end = detail.get("batch_end")
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    batch_line = ""
+    if batch_start is not None and batch_end is not None:
+        batch_line = f"\nBatch:       positions {batch_start}-{batch_end}"
+
+    subject = f"[RMP ALERT] Scanner failed ({market.upper()}): {reason}"
+    body = f"""RMP Scanner Failure Alert
+{'=' * 50}
+
+Market:      {market.upper()}
+Reason:      {reason}
+Error:       {error}{batch_line}
+Timestamp:   {now_utc}
+
+Likely causes:
+- Google Places API auth / quota / billing failure
+- Network outage from Tencent
+- Queue file corruption (queues/town-queue.{market}.json)
+- State file corruption (state/state.{market}.json)
+- Output write failure on /root/audit-scanner/output/
+
+Triage:
+1. SSH to Tencent: ssh root@43.134.33.213
+2. tail -100 /var/log/rmp-cron/scanner-{market}.log
+3. cat /root/audit-scanner/state/state.{market}.json
+4. Test API: cd /root/audit-scanner && python3 scanner.py --dry-run
+
+Cron will retry on next fire (daily). Pointer NOT advanced — same batch
+will be re-attempted. Pipeline keeps draining existing inventory meanwhile.
+
+Dispatched by alert_on_failure.py (scan-failure mode),
+invoked from scanner.py queue mode.
+"""
+    return dispatch_alert(subject, body)
+
+
+def run_queue_depth_low_mode(market: str, detail_json: str) -> int:
+    """Queue has < threshold towns remaining. Dispatch warning (not urgent)."""
+    detail = _parse_detail(detail_json)
+    remaining = detail.get("remaining", "?")
+    threshold = detail.get("threshold", "?")
+    queue_size = detail.get("queue_size", "?")
+    position = detail.get("position", "?")
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    subject = (
+        f"[RMP ALERT] Scanner queue depth low ({market.upper()}): "
+        f"{remaining} towns remaining"
+    )
+    body = f"""RMP Scanner Queue Depth Alert
+{'=' * 50}
+
+Market:         {market.upper()}
+Remaining:      {remaining} towns
+Threshold:      {threshold} towns (~30 days at current burn rate)
+Queue size:     {queue_size}
+Current pos:    {position}
+Timestamp:      {now_utc}
+
+NOT urgent. ~30-day window before exhaustion. Top up queue before then.
+
+Action:
+1. Generate fresh towns via build_queue.py (Mac) — see scanner/build_queue.py
+   OR manually append to queues/town-queue.{market}.json
+2. Deploy via Mac clone → audit-scanner.git → Tencent git pull
+3. Scanner continues from current pointer automatically
+
+This alert fires ONCE per state change. Won't re-fire until queue is topped
+up + scanner runs successfully.
+
+Dispatched by alert_on_failure.py (queue-depth-low mode),
+invoked from scanner.py queue mode.
+"""
+    return dispatch_alert(subject, body)
+
+
+def run_queue_exhausted_mode(market: str, detail_json: str) -> int:
+    """Queue pointer >= queue length. Dispatch URGENT alert."""
+    detail = _parse_detail(detail_json)
+    queue_size = detail.get("queue_size", "?")
+    position = detail.get("position", "?")
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    subject = f"[RMP ALERT] Scanner queue EXHAUSTED ({market.upper()})"
+    body = f"""RMP Scanner Queue Exhaustion Alert
+{'=' * 50}
+
+Market:         {market.upper()}
+Queue size:     {queue_size}
+Final position: {position}
+Timestamp:      {now_utc}
+
+URGENT: scanner will produce no fresh inventory until queue is topped up.
+Existing pipeline inventory will drain over the next ~4-9 days, then 0 sends.
+
+This means the depth-low warning at threshold 75 was missed or ignored.
+Investigate why the safety-net warning was bypassed.
+
+Action:
+1. URGENT: Top up queues/town-queue.{market}.json with fresh towns
+2. Generate via build_queue.py (Mac) — see scanner/build_queue.py
+3. Deploy via Mac clone → audit-scanner.git → Tencent git pull
+4. Scanner will reset last_alerted_for_exhaust on next successful scan
+
+Dispatched by alert_on_failure.py (queue-exhausted mode),
+invoked from scanner.py queue mode.
+"""
+    return dispatch_alert(subject, body)
+
+
 # --- Main ---
 
 def main() -> None:
@@ -295,7 +428,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["failure", "volume-floor"],
+        choices=["failure", "volume-floor", "scan-failure", "queue-depth-low", "queue-exhausted"],
         default="failure",
         help="Alert mode (default: failure, for backwards compat with run_market.sh)",
     )
@@ -329,6 +462,12 @@ def main() -> None:
         help=f"(volume-floor mode) Floor as %% of cap × days (default: {DEFAULT_VOLUME_FLOOR_PCT})",
     )
 
+    # scanner alert mode args (RMP #29; ignored in failure / volume-floor modes)
+    parser.add_argument(
+        "--detail", default="",
+        help="(scan-failure / queue-depth-low / queue-exhausted modes) JSON string with mode-specific context",
+    )
+
     args = parser.parse_args()
 
     if args.mode == "failure":
@@ -347,6 +486,21 @@ def main() -> None:
             cap=args.cap,
             days=args.days,
             floor_pct=args.floor_pct,
+        ))
+    elif args.mode == "scan-failure":
+        sys.exit(run_scan_failure_mode(
+            market=args.market,
+            detail_json=args.detail,
+        ))
+    elif args.mode == "queue-depth-low":
+        sys.exit(run_queue_depth_low_mode(
+            market=args.market,
+            detail_json=args.detail,
+        ))
+    elif args.mode == "queue-exhausted":
+        sys.exit(run_queue_exhausted_mode(
+            market=args.market,
+            detail_json=args.detail,
         ))
 
 
