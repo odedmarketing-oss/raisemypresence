@@ -54,3 +54,12 @@ DISCOVERY_RATE_LIMIT = float(os.environ.get("DISCOVERY_RATE_LIMIT", "1.0"))  # s
 WEBHOOK_PORT = int(os.environ.get("WEBHOOK_PORT", "8099"))
 WEBHOOK_BASE_URL = os.environ.get("WEBHOOK_BASE_URL", "http://43.134.33.213:8099")
 SENDGRID_WEBHOOK_VERIFY_KEY = os.environ.get("SENDGRID_WEBHOOK_VERIFY_KEY", "")
+
+# ---------------------------------------------------------------------------
+# Stripe (Block 4 — webhook fulfillment)
+# ---------------------------------------------------------------------------
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")  # sk_live_... or sk_test_...
+
+# Directory containing locale-keyed kit PDFs (kit_us.pdf, kit_uk.pdf, kit_au.pdf, kit_nz.pdf)
+KIT_PDF_DIR = Path(os.environ.get("KIT_PDF_DIR", str(PIPELINE_DIR / "kits")))
