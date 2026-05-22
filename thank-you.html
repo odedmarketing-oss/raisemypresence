@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Your kit is ready — Raise My Presence</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,300;1,9..144,400;1,9..144,500;1,9..144,600&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- Google tag (gtag.js) — sub-decision 2/4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-Y70YB8N49G"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-Y70YB8N49G', {
+    anonymize_ip: true,
+    allow_google_signals: false,
+    allow_ad_personalization_signals: false,
+  });
+</script>
+
+<!-- Vercel Web Analytics -->
+<script defer src="/_vercel/insights/script.js"></script>
+
+<style>
+  :root {
+    --cream: #FCFCF7;
+    --cream-deep: #F4F2EA;
+    --paper: #FFFFFF;
+    --ink: #0F1B2E;
+    --ink-soft: #2A3548;
+    --muted: #7A7570;
+    --muted-soft: #A5A099;
+    --green: #1B9F4D;
+    --green-deep: #137A3A;
+    --hairline: #E8E5DD;
+    --hairline-soft: #F0EDE5;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Fraunces', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-variation-settings: "opsz" 24;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 24px;
+  }
+
+  /* ──────────── EDITORIAL HEADER ──────────── */
+  .header {
+    width: 100%;
+    max-width: 720px;
+    padding: 40px 0 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: 14px;
+    margin-bottom: 96px;
+    animation: fadeUp 0.7s ease-out 0.1s both;
+  }
+  .wordmark {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: 0.005em;
+    color: var(--ink);
+    font-variation-settings: "opsz" 18;
+  }
+  .wordmark em {
+    color: var(--green);
+    font-style: italic;
+    font-weight: 500;
+  }
+  .dateline {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-transform: uppercase;
+    text-align: right;
+    line-height: 1.5;
+  }
+  .dateline .label {
+    font-weight: 400;
+    color: var(--muted-soft);
+  }
+
+  /* ──────────── CONTAINER ──────────── */
+  .container {
+    width: 100%;
+    max-width: 600px;
+    text-align: left;
+  }
+
+  /* ──────────── HERO ──────────── */
+  .hero {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 60px;
+    font-weight: 500;
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    margin-bottom: 18px;
+    color: var(--ink);
+    font-variation-settings: "opsz" 144;
+    animation: fadeUp 0.7s ease-out 0.25s both;
+  }
+  .hero em {
+    font-style: italic;
+    color: var(--green);
+    font-weight: 500;
+    font-variation-settings: "opsz" 144, "SOFT" 50, "WONK" 1;
+  }
+
+  .subhead {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 20px;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--muted);
+    line-height: 1.4;
+    margin-bottom: 72px;
+    font-variation-settings: "opsz" 24;
+    animation: fadeUp 0.7s ease-out 0.4s both;
+  }
+
+  /* ──────────── CONFIRMATION CARD ──────────── */
+  .receipt {
+    background: var(--paper);
+    border: 1px solid var(--hairline);
+    padding: 36px 36px 32px;
+    margin-bottom: 80px;
+    animation: fadeUp 0.7s ease-out 0.55s both;
+  }
+  .receipt-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 24px;
+    padding: 14px 0;
+    align-items: baseline;
+    border-bottom: 1px solid var(--hairline-soft);
+  }
+  .receipt-row:last-child { border-bottom: none; }
+  .receipt-row:first-child { padding-top: 0; }
+  .receipt-row[hidden] { display: none; }
+
+  .receipt-label {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+  }
+  .receipt-value {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.4;
+    font-variation-settings: "opsz" 20;
+  }
+
+  /* ──────────── SECTION LABEL ──────────── */
+  .section-label {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: fadeUp 0.7s ease-out 0.7s both;
+  }
+  .section-label::before,
+  .section-label::after {
+    content: '';
+    flex: 0 0 32px;
+    height: 1px;
+    background: var(--hairline);
+  }
+  .section-label::after { flex: 1; }
+
+  /* ──────────── STEPS ──────────── */
+  .steps {
+    list-style: none;
+    margin-bottom: 88px;
+    animation: fadeUp 0.7s ease-out 0.85s both;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 24px;
+    padding: 24px 0;
+    border-bottom: 1px solid var(--hairline-soft);
+    align-items: flex-start;
+  }
+  .step:last-child { border-bottom: none; }
+
+  .step-num {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1.5px solid var(--green);
+    color: var(--green);
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-style: italic;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-variation-settings: "opsz" 20, "SOFT" 50;
+    margin-top: 2px;
+  }
+  .step-body { padding-top: 6px; }
+  .step-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 19px;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 4px;
+    line-height: 1.35;
+    font-variation-settings: "opsz" 24;
+  }
+  .step-detail {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 15px;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--muted);
+    line-height: 1.5;
+    font-variation-settings: "opsz" 18;
+  }
+
+  /* ──────────── UPSELL ──────────── */
+  .upsell {
+    background: var(--cream-deep);
+    border: 1px solid var(--hairline);
+    padding: 44px 40px;
+    margin-bottom: 64px;
+    text-align: center;
+    animation: fadeUp 0.7s ease-out 1.0s both;
+  }
+  .upsell-eyebrow {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 16px;
+  }
+  .upsell-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 32px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin-bottom: 12px;
+    font-variation-settings: "opsz" 48;
+  }
+  .upsell-title em {
+    font-style: italic;
+    color: var(--green);
+    font-weight: 500;
+    font-variation-settings: "opsz" 48, "SOFT" 50;
+  }
+  .upsell-sub {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 16px;
+    font-style: italic;
+    color: var(--muted);
+    margin-bottom: 28px;
+    font-variation-settings: "opsz" 18;
+  }
+  .upsell-price {
+    font-style: normal;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--ink);
+    color: var(--cream);
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 15px;
+    font-weight: 500;
+    padding: 16px 32px;
+    text-decoration: none;
+    letter-spacing: 0.005em;
+    transition: background 0.25s ease, transform 0.15s ease;
+    font-variation-settings: "opsz" 18;
+  }
+  .cta:hover {
+    background: var(--green-deep);
+  }
+  .cta:active {
+    transform: scale(0.98);
+  }
+  .cta-arrow {
+    font-style: italic;
+    transition: transform 0.25s ease;
+  }
+  .cta:hover .cta-arrow {
+    transform: translateX(3px);
+  }
+
+  /* ──────────── SUPPORT ──────────── */
+  .support {
+    text-align: center;
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 15px;
+    font-style: italic;
+    color: var(--muted);
+    margin-bottom: 96px;
+    font-variation-settings: "opsz" 18;
+    animation: fadeUp 0.7s ease-out 1.15s both;
+  }
+  .support a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--muted-soft);
+    padding-bottom: 1px;
+    font-style: italic;
+    transition: border-color 0.2s ease;
+  }
+  .support a:hover {
+    border-bottom-color: var(--green);
+  }
+
+  /* ──────────── FOOTER ──────────── */
+  .footer {
+    width: 100%;
+    max-width: 720px;
+    border-top: 1px solid var(--hairline);
+    padding: 24px 0 40px;
+    text-align: center;
+    animation: fadeUp 0.7s ease-out 1.3s both;
+  }
+  .footer-mark {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 6px;
+    font-variation-settings: "opsz" 18;
+  }
+  .footer-mark em {
+    color: var(--green);
+    font-style: italic;
+  }
+  .footer-meta {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 11px;
+    color: var(--muted-soft);
+    letter-spacing: 0.04em;
+  }
+
+  /* ──────────── DIRECT-LINK GUARD FALLBACK (sub-decision 4/4) ──────────── */
+  .fallback {
+    width: 100%;
+    max-width: 600px;
+    text-align: center;
+    padding: 96px 0;
+    animation: fadeUp 0.7s ease-out 0.2s both;
+  }
+  .fallback-message {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 36px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin-bottom: 32px;
+    font-variation-settings: "opsz" 48;
+  }
+  .fallback-message em {
+    color: var(--green);
+    font-style: italic;
+    font-weight: 500;
+    font-variation-settings: "opsz" 48, "SOFT" 50;
+  }
+  .fallback-cta {
+    display: inline-block;
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 16px;
+    font-style: italic;
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--muted-soft);
+    padding-bottom: 2px;
+    margin-bottom: 24px;
+    transition: border-color 0.2s ease;
+  }
+  .fallback-cta:hover {
+    border-bottom-color: var(--green);
+  }
+  .fallback-note {
+    font-family: 'Geist', system-ui, sans-serif;
+    font-size: 11px;
+    color: var(--muted-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+
+  /* ──────────── ANIMATION ──────────── */
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ──────────── MOBILE ──────────── */
+  @media (max-width: 640px) {
+    body { padding: 0 20px; }
+    .header {
+      padding-top: 28px;
+      padding-bottom: 12px;
+      margin-bottom: 64px;
+      align-items: flex-end;
+    }
+    .wordmark { font-size: 15px; }
+    .dateline { font-size: 9px; letter-spacing: 0.12em; }
+
+    .hero { font-size: 40px; letter-spacing: -0.02em; margin-bottom: 14px; }
+    .subhead { font-size: 17px; margin-bottom: 48px; }
+
+    .receipt { padding: 28px 24px 24px; margin-bottom: 56px; }
+    .receipt-row {
+      grid-template-columns: 1fr;
+      gap: 4px;
+      padding: 12px 0;
+    }
+    .receipt-value { font-size: 16px; }
+
+    .section-label { margin-bottom: 24px; }
+    .section-label::before { flex: 0 0 20px; }
+
+    .steps { margin-bottom: 64px; }
+    .step {
+      grid-template-columns: 40px 1fr;
+      gap: 18px;
+      padding: 20px 0;
+    }
+    .step-num { width: 38px; height: 38px; font-size: 17px; }
+    .step-title { font-size: 17px; }
+    .step-detail { font-size: 14px; }
+
+    .upsell { padding: 32px 24px; margin-bottom: 48px; }
+    .upsell-title { font-size: 24px; }
+    .upsell-sub { font-size: 15px; margin-bottom: 22px; }
+    .cta { padding: 14px 24px; font-size: 14px; }
+
+    .support { margin-bottom: 64px; font-size: 14px; }
+
+    .fallback { padding: 64px 0; }
+    .fallback-message { font-size: 26px; margin-bottom: 24px; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ──────────── EDITORIAL HEADER ──────────── -->
+  <header class="header">
+    <div class="wordmark">Raise <em>my</em> Presence</div>
+    <div class="dateline">
+      <div><span class="label">Confirmation ·</span> <span id="dateline-date">—</span></div>
+      <div><span class="label">Edition ·</span> <span id="dateline-locale">—</span></div>
+    </div>
+  </header>
+
+  <!-- ──────────── MAIN (confirmed-purchase render) ──────────── -->
+  <main class="container" id="main">
+
+    <h1 class="hero"><span id="hero-prefix">Your kit is ready</span><em id="personalized-name" hidden></em>.</h1>
+    <p class="subhead" id="subhead">Thank you for your purchase. Check your inbox for delivery.</p>
+
+    <section class="receipt" aria-label="Order details">
+      <div class="receipt-row" id="row-order">
+        <div class="receipt-label">Order</div>
+        <div class="receipt-value" id="order-value">—</div>
+      </div>
+      <div class="receipt-row" id="row-amount">
+        <div class="receipt-label">Amount</div>
+        <div class="receipt-value" id="amount-value">—</div>
+      </div>
+      <div class="receipt-row" id="row-email" hidden>
+        <div class="receipt-label">Delivered to</div>
+        <div class="receipt-value" id="email-value"></div>
+      </div>
+      <div class="receipt-row" id="row-date">
+        <div class="receipt-label">Order date</div>
+        <div class="receipt-value" id="date-value">—</div>
+      </div>
+      <div class="receipt-row" id="row-reference">
+        <div class="receipt-label">Order reference</div>
+        <div class="receipt-value" id="reference-value">—</div>
+      </div>
+    </section>
+
+    <div class="section-label">What happens next</div>
+
+    <ol class="steps">
+      <li class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Check your email</div>
+          <div class="step-detail">Your kit arrives within two minutes.</div>
+        </div>
+      </li>
+      <li class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Start with the Fast Track on page 3</div>
+          <div class="step-detail">Forty-five minutes &mdash; no jargon, action-ordered.</div>
+        </div>
+      </li>
+      <li class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Work through eight milestones</div>
+          <div class="step-detail">Follow our eight-week roadmap to hit every milestone and secure your position as the top-ranked business in your category.</div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="upsell" aria-label="Monthly Management offer">
+      <div class="upsell-eyebrow">For those short on time</div>
+      <div class="upsell-title">Would you rather we run this <em>for you</em>?</div>
+      <div class="upsell-sub">Add Monthly Management &mdash; <span class="upsell-price" id="upsell-price">—</span>, cancel anytime.</div>
+      <a href="#" id="upsell-cta" class="cta">
+        Add Monthly Management
+        <span class="cta-arrow">&rarr;</span>
+      </a>
+    </aside>
+
+    <p class="support">
+      Kit hasn't arrived within five minutes? Check your spam folder. If it's still missing, write to <a href="mailto:hello@raisemypresence.com">hello@raisemypresence.com</a> &mdash; we'll resend immediately.
+    </p>
+
+  </main>
+
+  <!-- ──────────── DIRECT-LINK GUARD FALLBACK (sub-decision 4/4) ──────────── -->
+  <!-- Renders when ?tier or ?locale is missing/invalid. Auto-redirects in 3s. -->
+  <main class="fallback" id="fallback" hidden>
+    <div class="fallback-message">Thanks for visiting Raise <em>my</em> Presence.</div>
+    <a href="/" class="fallback-cta">Back to homepage</a>
+    <div class="fallback-note">Redirecting in 3 seconds…</div>
+  </main>
+
+  <!-- ──────────── FOOTER ──────────── -->
+  <footer class="footer">
+    <div class="footer-mark">Raise <em>my</em> Presence</div>
+    <div class="footer-meta">&copy; 2026 Raise My Presence &middot; Operated by W2M LIMITED, Hong Kong</div>
+  </footer>
+
+  <script>
+    // ════════════════════════════════════════════════════════════════════
+    // Block 3 thank-you.html — URL-param routing, direct-link guard,
+    // locale-derived rendering, GA4 conversion, Stripe session fetch.
+    // ════════════════════════════════════════════════════════════════════
+
+    const VALID_TIERS = ['kit', 'monthly'];
+    const VALID_LOCALES = ['US', 'UK', 'AU', 'NZ'];
+
+    // Locale lookup table — sourced from Stripe-Plan.md Created Products Tracker.
+    // Prices and Payment Link URLs are canonical; do not edit without coordinated
+    // vault update.
+    const LOCALE_DATA = {
+      US: {
+        kit_name: 'US edition',
+        currency_symbol: '$',
+        currency_code: 'USD',
+        kit_price: '79.00',
+        monthly_price: '39',
+        monthly_url: 'https://buy.stripe.com/00weV53V2aF2aKHc9cdAk04',
+        locale_label: 'United States',
+      },
+      UK: {
+        kit_name: 'UK edition',
+        currency_symbol: '£',
+        currency_code: 'GBP',
+        kit_price: '59.00',
+        monthly_price: '29',
+        monthly_url: 'https://buy.stripe.com/7sYbITezG7sQ6ur3CGdAk05',
+        locale_label: 'United Kingdom',
+      },
+      AU: {
+        kit_name: 'AU edition',
+        currency_symbol: '$',
+        currency_code: 'AUD',
+        kit_price: '99.00',
+        monthly_price: '49',
+        monthly_url: 'https://buy.stripe.com/00waEP0IQ4gE3if4GKdAk06',
+        locale_label: 'Australia',
+      },
+      NZ: {
+        kit_name: 'NZ edition',
+        currency_symbol: '$',
+        currency_code: 'NZD',
+        kit_price: '99.00',
+        monthly_price: '49',
+        monthly_url: 'https://buy.stripe.com/00w28j0IQ6oM1a76OSdAk07',
+        locale_label: 'New Zealand',
+      },
+    };
+
+    // Tier-specific content — applied at render time based on ?tier= URL param.
+    // Both tiers share the same structural HTML; JS swaps text content +
+    // visibility per tier. Kit and monthly buyers see different copy throughout.
+    const TIER_CONTENT = {
+      kit: {
+        hero_prefix: 'Your kit is ready',
+        subhead: 'Thank you for your purchase. Check your inbox for delivery.',
+        order_format: (d) => `The Raise My Presence Kit \u2014 ${d.kit_name}`,
+        amount_format: (d) => `${d.currency_symbol}${d.kit_price} ${d.currency_code}`,
+        ga_value: (d) => parseFloat(d.kit_price),
+        steps: [
+          { title: 'Check your email', detail: 'Your kit arrives within two minutes.' },
+          { title: 'Start with the Fast Track on page 3', detail: 'Forty-five minutes \u2014 no jargon, action-ordered.' },
+          { title: 'Work through eight milestones', detail: 'Follow our eight-week roadmap to hit every milestone and secure your position as the top-ranked business in your category.' },
+        ],
+        show_upsell: true,
+        support_html: 'Kit hasn\'t arrived within five minutes? Check your spam folder. If it\'s still missing, write to <a href="mailto:hello@raisemypresence.com">hello@raisemypresence.com</a> \u2014 we\'ll resend immediately.',
+      },
+      monthly: {
+        hero_prefix: 'Welcome aboard',
+        subhead: 'Thank you for your purchase. We begin work within five business days.',
+        order_format: (d) => `Raise My Presence Management \u2014 ${d.locale_label} subscription`,
+        amount_format: (d) => `${d.currency_symbol}${d.monthly_price}.00/mo ${d.currency_code}`,
+        ga_value: (d) => parseFloat(d.monthly_price),
+        steps: [
+          { title: 'We audit your Google profile', detail: 'Within two business days, every optimization opportunity is mapped.' },
+          { title: 'We begin the monthly cycle', detail: 'Reviews, posts, photos, citations \u2014 executed silently, every month.' },
+          { title: 'Your ranking rises', detail: 'No calls, no meetings, no reports. Results show in your profile.' },
+        ],
+        show_upsell: false,
+        support_html: 'Manage your subscription in your <a href="https://billing.stripe.com/p/login/dRmeV51MU4gE6ur7SWdAk00">Customer Portal</a> anytime. Questions? Write to <a href="mailto:hello@raisemypresence.com">hello@raisemypresence.com</a>.',
+      },
+    };
+
+    const API_BASE = 'https://webhooks.raisemypresence.com';
+    const FETCH_TIMEOUT_MS = 5000;
+
+    // ────────── URL param parsing ──────────
+    const params = new URLSearchParams(window.location.search);
+    const tier = params.get('tier');
+    const locale = params.get('locale');
+    const sessionId = params.get('session_id');
+
+    // ────────── Helpers ──────────
+    function formatDate(date) {
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+    }
+
+    function computeOrderReference(sid) {
+      // Mirrors webhook_server.py _compute_order_reference()
+      // Format: RMP-YYYY-<last 8 chars of session_id, uppercase>
+      const year = new Date().getUTCFullYear();
+      if (!sid || sid.length < 8) return `RMP-${year}-PENDING`;
+      return `RMP-${year}-${sid.slice(-8).toUpperCase()}`;
+    }
+
+    function showFallback() {
+      document.getElementById('main').hidden = true;
+      document.getElementById('fallback').hidden = false;
+      // Auto-redirect to homepage after 3 seconds (sub-decision 4/4)
+      setTimeout(() => { window.location.href = '/'; }, 3000);
+    }
+
+    // ────────── Direct-link guard (sub-decision 4/4) ──────────
+    if (!VALID_TIERS.includes(tier) || !VALID_LOCALES.includes(locale)) {
+      showFallback();
+    } else {
+      const data = LOCALE_DATA[locale];
+      const content = TIER_CONTENT[tier];
+
+      // ────────── Tier-driven content swap ──────────
+      // Hero prefix, subhead, 3-step content, upsell visibility, and support
+      // line all switch between kit and monthly variants based on ?tier=.
+      document.getElementById('hero-prefix').textContent = content.hero_prefix;
+      document.getElementById('subhead').textContent = content.subhead;
+      document.title = `${content.hero_prefix} \u2014 Raise My Presence`;
+
+      const stepTitles = document.querySelectorAll('.step-title');
+      const stepDetails = document.querySelectorAll('.step-detail');
+      content.steps.forEach((step, i) => {
+        if (stepTitles[i]) stepTitles[i].textContent = step.title;
+        if (stepDetails[i]) stepDetails[i].textContent = step.detail;
+      });
+
+      if (!content.show_upsell) {
+        document.querySelector('.upsell').hidden = true;
+      }
+
+      // support_html contains hardcoded `<a>` tags (no user input — safe).
+      document.querySelector('.support').innerHTML = content.support_html;
+
+      // ────────── Locale-derived fields ──────────
+      // These work without Stripe fetch — no network dependency.
+      document.getElementById('dateline-date').textContent = formatDate(new Date());
+      document.getElementById('dateline-locale').textContent = data.locale_label;
+      document.getElementById('order-value').textContent = content.order_format(data);
+      document.getElementById('amount-value').textContent = content.amount_format(data);
+      document.getElementById('date-value').textContent = formatDate(new Date());
+      document.getElementById('reference-value').textContent =
+        computeOrderReference(sessionId);
+      document.getElementById('upsell-price').textContent =
+        `${data.currency_symbol}${data.monthly_price}/mo`;
+      document.getElementById('upsell-cta').href = data.monthly_url;
+
+      // ────────── Fire GA4 conversion event ──────────
+      // transaction_id = session_id for refresh-dedup (GA4 collapses duplicate
+      // purchase events by transaction_id). Fires immediately on page load —
+      // does NOT wait for Stripe fetch (which could fail and bias conversion
+      // data downward). Per-tier `ga_value` returns kit price or monthly price.
+      if (window.gtag) {
+        gtag('event', 'purchase', {
+          transaction_id: sessionId || `unknown-${Date.now()}`,
+          value: content.ga_value(data),
+          currency: data.currency_code,
+          tier: tier,
+          locale: locale,
+        });
+      }
+
+      // ────────── Fetch Stripe-derived fields ──────────
+      // Personalization (business_name in hero, email in receipt) requires
+      // session retrieve via Tencent endpoint. 5-second timeout; graceful
+      // fallback on any error.
+      if (sessionId) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+        fetch(
+          `${API_BASE}/api/session/${encodeURIComponent(sessionId)}`,
+          { signal: controller.signal }
+        )
+          .then((response) => {
+            clearTimeout(timeoutId);
+            if (!response.ok) return null;
+            return response.json();
+          })
+          .then((stripeData) => {
+            if (!stripeData) return;
+
+            if (stripeData.business_name) {
+              const nameEl = document.getElementById('personalized-name');
+              nameEl.textContent = `, ${stripeData.business_name}`;
+              nameEl.hidden = false;
+            }
+
+            if (stripeData.email) {
+              document.getElementById('email-value').textContent = stripeData.email;
+              document.getElementById('row-email').hidden = false;
+            }
+
+            // Server-computed order_reference is authoritative source.
+            // Client value was identical by construction, but override for
+            // robustness (in case future spec changes the format).
+            if (stripeData.order_reference) {
+              document.getElementById('reference-value').textContent =
+                stripeData.order_reference;
+            }
+          })
+          .catch(() => {
+            clearTimeout(timeoutId);
+            // Graceful fallback: locale-derived fields + client-computed
+            // order_reference already rendered. business_name + email rows
+            // stay hidden. Customer's full personalization arrives in email.
+          });
+      }
+    }
+  </script>
+
+</body>
+</html>
