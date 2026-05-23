@@ -38,7 +38,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -256,12 +256,42 @@ def get_suppression_surface() -> dict:
         result["wow_growth_pct"] = (total - baseline["count"]) / baseline["count"] * 100
         result["wow_status"] = "OK"
 
-    # Update baseline so next run has fresh prior count.
-    # Failure to write baseline does NOT fail the digest — next run is just another FIRST_RUN.
-    try:
-        _write_baseline(total)
-    except Exception as e:
-        logger.error(f"Failed to update suppression baseline: {e}")
+    # ROLLING 7-DAY WoW: only refresh baseline if no baseline exists OR existing
+    # baseline is >= 7 days old. This makes Surface 4 a true week-over-week
+    # comparison aligned with runbook thresholds (<5 / 5-15 / >15% growth pct
+    # calibrated for weekly drift, not daily noise). Previously the baseline was
+    # overwritten every run, collapsing the comparison to day-over-day and
+    # producing false-CONCERNING alarms on daily noise.
+    should_write_baseline = False
+    if baseline is None:
+        should_write_baseline = True  # first run — establish baseline
+    else:
+        try:
+            baseline_date = datetime.strptime(baseline["date"], "%Y-%m-%d").date()
+            age_days = (date.today() - baseline_date).days
+            if age_days >= 7:
+                should_write_baseline = True
+                logger.info(f"Baseline age {age_days} days >= 7; refreshing baseline.")
+            else:
+                logger.info(f"Baseline age {age_days} days < 7; keeping existing baseline.")
+        except Exception as e:
+            logger.warning(f"Could not parse baseline date {baseline['date']!r}: {e}; refreshing.")
+            should_write_baseline = True
+
+    if should_write_baseline:
+        try:
+            _write_baseline(total)
+        except Exception as e:
+            logger.error(f"Failed to update suppression baseline: {e}")
+
+    # Compute baseline age in days for detail-string rendering
+    result["baseline_age_days"] = None
+    if baseline:
+        try:
+            baseline_date = datetime.strptime(baseline["date"], "%Y-%m-%d").date()
+            result["baseline_age_days"] = (date.today() - baseline_date).days
+        except Exception:
+            pass
 
     return result
 
@@ -432,15 +462,17 @@ def _format_surface_4_detail(s4: dict) -> str:
     if wow == "FIRST_RUN":
         return (
             f"First run &mdash; baseline established at {s4['current_total']} suppressions. "
-            f"WoW delta available on next run."
+            f"Comparison delta builds daily; full WoW delta at day 7."
         )
     if wow == "BASELINE_ZERO":
         return f"Current = {s4['current_total']}; prior baseline was 0."
     prior = s4["baseline"]["count"]
     curr = s4["current_total"]
     growth = s4["wow_growth_pct"]
+    age_days = s4.get("baseline_age_days")
+    age_str = f" ({age_days}d ago)" if age_days is not None else ""
     return (
-        f"{curr} today vs {prior} on {s4['baseline']['date']} "
+        f"{curr} today vs {prior} on {s4['baseline']['date']}{age_str} "
         f"({curr - prior:+d}, {growth:+.1f}%)"
     )
 
