@@ -1,0 +1,39 @@
+# /etc/cron.d/deliverability-digest
+# Raise My Presence — Daily Deliverability Digest
+#
+# Managed by RMP-2 deploy workflow. Edit canonical source in vault at:
+#   Local-Presence-Optimization/src/pipeline/deliverability-digest
+# Never edit /etc/cron.d/deliverability-digest directly on Tencent.
+#
+# Created RMP #46, 2026-05-23.
+#
+# Schedule (system local time = CST/UTC+8 — cron uses system local, NOT UTC):
+#   09:00 CST → 01:00 UTC → 08:00 Bangkok (operator timezone)
+#
+# Fires deliverability_digest.py daily; queries SendGrid Stats + suppression
+# endpoints + (optionally) Google Postmaster Tools; renders HTML+plain-text
+# digest and SendGrid-sends to operator inbox (odedmarketing@gmail.com).
+#
+# Covers Surfaces 3/4/5/6 from email-health-audit-runbook.md:
+#   3. SendGrid spam complaint rate (14d rolling)
+#   4. Suppression list WoW growth (7-day rolling baseline — RMP #46 patch)
+#   5. Google Postmaster domain reputation (graceful degradation if GCP creds absent)
+#   6. Google Postmaster IP reputation (same)
+#
+# Surfaces 1/2/8/9 are covered separately by alert_on_failure.py volume-floor
+# alerter + per-market cron log structure.
+#
+# MAILTO="" disables cron's default mail-on-output behavior.
+# Script-side failures (non-zero exit) log to /var/log/rmp-cron/deliverability-digest.log.
+#
+# Rollback: comment out the cron line below.
+# Full removal: rm /etc/cron.d/deliverability-digest on Tencent.
+#
+# File format: standard /etc/cron.d/ system cron (user field required between
+# timing and command). Must be mode 644, owned by root, no extension.
+
+MAILTO=""
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Daily digest — 09:00 server local = 08:00 Bangkok
+0 9 * * * root cd /root/audit-scanner/pipeline && python3 deliverability_digest.py >> /var/log/rmp-cron/deliverability-digest.log 2>&1
