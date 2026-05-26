@@ -6,8 +6,16 @@ Raise My Presence — Daily Deliverability Digest
 Surfaces (per Local-Presence-Optimization/email-health-audit-runbook.md):
   3. SendGrid spam complaint rate (14d rolling)
   4. Suppression list WoW growth (SendGrid suppression endpoints vs state-file baseline)
-  5. Google Postmaster domain reputation — graceful degradation if GCP creds absent
-  6. Google Postmaster IP reputation — graceful degradation if GCP creds absent
+  5. HetrixTools blacklist monitor — domain blacklist status across ~23 RBLs
+
+Surface 6 (Google Postmaster IP reputation) deprecated RMP #50 (2026-05-26):
+Postmaster Tools v1 reputation API end-of-life'd by Google with no v2 replacement
+for domain/IP reputation dashboards. Pillar B-1 replaces Surface 5 with HetrixTools
+blacklist monitor (free tier, IP + domain monitoring against ~23 RBLs); Pillar B-2
+(future) will add Surface 7 (Postmark DMARC authentication health).
+
+Surface 5 historical (RMP #46-#49): Postmaster v1 domain reputation, gracefully
+degraded to "AUTH NOT CONFIGURED" since shipdate. Now replaced by HetrixTools.
 
 Output: HTML + plain-text multipart email to operator via SendGrid.
 
@@ -23,15 +31,13 @@ Dependencies (already in pipeline/requirements.txt):
   - python-dotenv
   - requests
 
-Optional dependency for Surfaces 5/6 (lazy import; graceful if missing):
-  - google-auth (Postmaster Tools API service-account auth)
-
 Exit codes:
   0  digest sent successfully (or --dry-run completed)
   1  digest send failed (SendGrid error)
   2  fatal env error (SENDGRID_API_KEY missing)
 
 Created RMP #46, 2026-05-23.
+Surface 5 migrated Postmaster v1 → HetrixTools RMP #50, 2026-05-26 (Pillar B-1).
 """
 
 import argparse
@@ -53,14 +59,24 @@ load_dotenv(PIPELINE_DIR / ".env", override=True)
 
 # --- Config ---
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
-GCP_POSTMASTER_KEY_PATH = os.environ.get("GCP_POSTMASTER_KEY_PATH", "")
+HETRIXTOOLS_API_KEY = os.environ.get("HETRIXTOOLS_API_KEY", "")
 
 OPERATOR_EMAIL = "odedmarketing@gmail.com"
 FROM_EMAIL = "hello@mail.raisemypresence.com"
 FROM_NAME = "RMP Deliverability Monitor"
 
-# Postmaster monitors the sending domain (where DKIM signs), not the apex
-POSTMASTER_DOMAIN = "mail.raisemypresence.com"
+# HetrixTools v2 Blacklist Monitor API
+# Endpoint pattern: https://api.hetrixtools.com/v2/<API_TOKEN>/blacklist/monitors/<PAGE>/<PER_PAGE>/
+# Response shape (verified RMP #50 against live account):
+#   [[{ID, Type, Target, Add_Date, Last_Check, Status, Label,
+#       Contact_List_ID, Blacklisted_Count (str), Blacklisted_On (list|null),
+#       Links: {Report_Link, Whitelabel_Report_Link}}, ...],
+#    {Meta: {Total_Records: "N"}, Links: {Pages: []}}]
+HETRIX_BASE_URL = "https://api.hetrixtools.com/v2"
+HETRIX_PAGE_SIZE = 50  # 2 monitors today; 50 leaves headroom without pagination need
+
+# Sender subdomain (where DKIM signs); retained for digest header rendering
+SENDER_DOMAIN = "mail.raisemypresence.com"
 
 # State file for WoW baseline (Surface 4)
 STATE_DIR = Path("/root/audit-scanner/state")
@@ -75,12 +91,19 @@ SPAM_RATE_BAD_FRAC = 0.001       # >0.1%
 SUPPRESSION_WOW_HEALTHY_PCT = 5.0   # <5%
 SUPPRESSION_WOW_BAD_PCT = 15.0      # >15%
 
+# Surface 5 (HetrixTools) classification (binary, no CONCERNING tier):
+#   Any monitor with Blacklisted_Count > 0 -> BAD (immediate operator surface per §1.21)
+#   All monitors at 0/N -> HEALTHY
+# Rationale: blacklist hit is operator-actionable on appearance; partial-hit handling
+# is per-RBL severity, deferred until first real listing event.
+
 # Status labels
 STATUS_HEALTHY = "HEALTHY"
 STATUS_CONCERNING = "CONCERNING"
 STATUS_BAD = "BAD"
 STATUS_UNKNOWN = "UNKNOWN"
 STATUS_NOT_CONFIGURED = "AUTH NOT CONFIGURED"
+STATUS_DEPRECATED = "DEPRECATED"
 
 # HTML badge colors per status (match the kit/Block 3 green-accent palette)
 STATUS_COLORS = {
@@ -310,126 +333,101 @@ def classify_suppression(result: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Surfaces 5 + 6 — Google Postmaster Tools (domain + IP reputation)
-#   Graceful degradation chain:
-#     1. GCP_POSTMASTER_KEY_PATH not set     -> NOT_CONFIGURED placeholder
-#     2. service account JSON file missing   -> NOT_CONFIGURED placeholder
-#     3. google-auth library not installed   -> AUTH_LIB_MISSING placeholder
-#     4. API call fails (quota/scope/net)    -> FAILED placeholder with error
-#     5. API returns no traffic stats        -> NO_DATA placeholder
+# Surface 5 — HetrixTools blacklist monitor
+#   Migrated from Google Postmaster v1 at RMP #50 (Pillar B-1).
+#   Postmaster v1 EOL'd by Google; v2 has no equivalent reputation surface.
+#   HetrixTools free tier monitors 2 targets (mail.raisemypresence.com,
+#   raisemypresence.com) against ~23 RBLs (Spamhaus, SpamCop, SenderScore,
+#   Comcast DNSBL, etc.). Polled every ~20 min by HetrixTools; we read cached
+#   state via API at digest time.
+#
+# Graceful degradation chain:
+#   1. HETRIXTOOLS_API_KEY not set      -> NOT_CONFIGURED placeholder
+#   2. API call fails (network/auth)    -> FAILED placeholder with error
+#   3. API returns empty monitor list   -> NO_DATA placeholder
 # ---------------------------------------------------------------------------
 
-def get_postmaster_reputation() -> dict:
+def get_hetrixtools_blacklist() -> dict:
     """
-    Postmaster Tools API: /v1/domains/{domain}/trafficStats
+    HetrixTools v2 List Blacklist Monitors API call.
 
     Returns on success:
-        {"domain_rep": str, "ip_rep": str, "raw_latest": dict}
+        {
+          "monitors": [
+            {"target": str, "type": str, "blacklisted_count": int,
+             "blacklisted_on": list, "last_check_ts": int, "report_link": str,
+             "label": str},
+            ...
+          ],
+          "total_records": int,
+          "any_listed": bool,
+        }
     Returns on graceful degradation or failure:
-        {"status": "NOT_CONFIGURED" | "AUTH_LIB_MISSING" | "FAILED" | "NO_DATA",
-         "domain_rep": placeholder, "ip_rep": placeholder, ...}
+        {"status": "NOT_CONFIGURED" | "FAILED" | "NO_DATA", "error": str (optional)}
     """
-    if not GCP_POSTMASTER_KEY_PATH:
-        logger.info("Surfaces 5/6 — GCP_POSTMASTER_KEY_PATH not set; graceful degradation.")
-        return {
-            "status": "NOT_CONFIGURED",
-            "domain_rep": STATUS_NOT_CONFIGURED,
-            "ip_rep": STATUS_NOT_CONFIGURED,
-        }
+    if not HETRIXTOOLS_API_KEY:
+        logger.info("Surface 5 — HETRIXTOOLS_API_KEY not set; graceful degradation.")
+        return {"status": "NOT_CONFIGURED"}
 
-    if not Path(GCP_POSTMASTER_KEY_PATH).exists():
-        logger.warning(f"Surfaces 5/6 — service account file not found: {GCP_POSTMASTER_KEY_PATH}")
-        return {
-            "status": "NOT_CONFIGURED",
-            "domain_rep": STATUS_NOT_CONFIGURED,
-            "ip_rep": STATUS_NOT_CONFIGURED,
-        }
-
+    url = f"{HETRIX_BASE_URL}/{HETRIXTOOLS_API_KEY}/blacklist/monitors/0/{HETRIX_PAGE_SIZE}/"
     try:
-        from google.oauth2 import service_account
-        from google.auth.transport.requests import Request as GAuthRequest
-    except ImportError:
-        logger.warning(
-            "Surfaces 5/6 — google-auth library not installed. "
-            "Install on Tencent: pip install google-auth"
-        )
-        return {
-            "status": "AUTH_LIB_MISSING",
-            "domain_rep": STATUS_NOT_CONFIGURED,
-            "ip_rep": STATUS_NOT_CONFIGURED,
-        }
-
-    try:
-        scopes = ["https://www.googleapis.com/auth/postmaster.readonly"]
-        creds = service_account.Credentials.from_service_account_file(
-            GCP_POSTMASTER_KEY_PATH, scopes=scopes
-        )
-        creds.refresh(GAuthRequest())
-        token = creds.token
-
-        # Last 7 days; latest entry is the most relevant signal
-        url = f"https://gmailpostmastertools.googleapis.com/v1/domains/{POSTMASTER_DOMAIN}/trafficStats"
-        headers = {"Authorization": f"Bearer {token}"}
-        end_d = date.today() - timedelta(days=1)
-        start_d = end_d - timedelta(days=7)
-        params = {
-            "startDate.year": start_d.year,
-            "startDate.month": start_d.month,
-            "startDate.day": start_d.day,
-            "endDate.year": end_d.year,
-            "endDate.month": end_d.month,
-            "endDate.day": end_d.day,
-        }
-        r = requests.get(url, headers=headers, params=params, timeout=15)
+        r = requests.get(url, timeout=15)
         r.raise_for_status()
-        stats = r.json().get("trafficStats", [])
-        if not stats:
-            logger.info("Postmaster API returned no traffic stats (volume may be too low).")
-            return {
-                "status": "NO_DATA",
-                "domain_rep": "NO_DATA",
-                "ip_rep": "NO_DATA",
-            }
-
-        latest = stats[-1]
-        domain_rep = latest.get("domainReputation", "UNKNOWN")
-
-        # ipReputations is a list of buckets per reputation level + IP count.
-        # Take the bucket with the highest ipCount as the headline reputation.
-        ip_reps = latest.get("ipReputations", [])
-        if ip_reps:
-            ip_reps_sorted = sorted(ip_reps, key=lambda x: x.get("ipCount", 0), reverse=True)
-            ip_rep = ip_reps_sorted[0].get("reputation", "UNKNOWN")
-        else:
-            ip_rep = "UNKNOWN"
-
-        return {
-            "domain_rep": domain_rep,
-            "ip_rep": ip_rep,
-            "raw_latest": latest,
-        }
+        payload = r.json()
     except Exception as e:
-        logger.error(f"Surfaces 5/6 — Postmaster API call failed: {e}")
-        return {
-            "status": "FAILED",
-            "error": str(e),
-            "domain_rep": STATUS_UNKNOWN,
-            "ip_rep": STATUS_UNKNOWN,
-        }
+        logger.error(f"Surface 5 (HetrixTools) — API call failed: {e}")
+        return {"status": "FAILED", "error": str(e)}
+
+    # v2 shape: [[monitor_dict, ...], {"Meta": {"Total_Records": "N"}, ...}]
+    if not isinstance(payload, list) or len(payload) < 1:
+        logger.warning(f"Surface 5 — unexpected payload shape: {type(payload).__name__}")
+        return {"status": "FAILED", "error": "unexpected response shape"}
+
+    raw_monitors = payload[0] if isinstance(payload[0], list) else []
+    meta = payload[1].get("Meta", {}) if len(payload) >= 2 and isinstance(payload[1], dict) else {}
+    try:
+        total_records = int(meta.get("Total_Records", len(raw_monitors)))
+    except (ValueError, TypeError):
+        total_records = len(raw_monitors)
+
+    if not raw_monitors:
+        logger.info("Surface 5 — HetrixTools returned 0 monitors (none configured).")
+        return {"status": "NO_DATA"}
+
+    monitors = []
+    any_listed = False
+    for m in raw_monitors:
+        try:
+            bl_count = int(m.get("Blacklisted_Count", "0"))
+        except (ValueError, TypeError):
+            bl_count = 0
+        if bl_count > 0:
+            any_listed = True
+        monitors.append({
+            "target": m.get("Target", "?"),
+            "type": m.get("Type", "?"),
+            "blacklisted_count": bl_count,
+            "blacklisted_on": m.get("Blacklisted_On") or [],
+            "last_check_ts": m.get("Last_Check", 0),
+            "report_link": (m.get("Links") or {}).get("Report_Link", ""),
+            "label": m.get("Label", ""),
+        })
+
+    return {
+        "monitors": monitors,
+        "total_records": total_records,
+        "any_listed": any_listed,
+    }
 
 
-def classify_postmaster_rep(rep_value: str) -> str:
-    if rep_value == STATUS_NOT_CONFIGURED:
+def classify_hetrixtools(result: dict) -> str:
+    """Surface 5 classifier. Binary: any listing -> BAD; all clear -> HEALTHY."""
+    status = result.get("status")
+    if status == "NOT_CONFIGURED":
         return STATUS_NOT_CONFIGURED
-    if rep_value in (STATUS_UNKNOWN, "UNKNOWN", "NO_DATA"):
+    if status in ("FAILED", "NO_DATA"):
         return STATUS_UNKNOWN
-    if rep_value in ("HIGH", "MEDIUM"):
-        return STATUS_HEALTHY
-    if rep_value == "LOW":
-        return STATUS_CONCERNING
-    if rep_value == "BAD":
-        return STATUS_BAD
-    return STATUS_UNKNOWN
+    return STATUS_BAD if result.get("any_listed") else STATUS_HEALTHY
 
 
 # ---------------------------------------------------------------------------
@@ -477,49 +475,66 @@ def _format_surface_4_detail(s4: dict) -> str:
     )
 
 
-def _format_postmaster_detail(pm: dict) -> tuple:
-    """Return (domain_detail_html, ip_detail_html)."""
-    status = pm.get("status")
+def _format_surface_5_detail(s5: dict) -> str:
+    """Render HetrixTools Surface 5 detail string for HTML."""
+    status = s5.get("status")
     if status == "NOT_CONFIGURED":
-        msg = (
-            "GCP service account for Postmaster Tools not configured on Tencent. "
-            "Drop service-account JSON to <code>/root/audit-scanner/credentials/</code> "
-            "and set <code>GCP_POSTMASTER_KEY_PATH</code> in pipeline <code>.env</code> to enable."
+        return (
+            "HetrixTools API key not configured on Tencent. "
+            "Set <code>HETRIXTOOLS_API_KEY</code> in pipeline <code>.env</code> to enable."
         )
-        return msg, msg
-    if status == "AUTH_LIB_MISSING":
-        msg = (
-            "<code>google-auth</code> library missing on Tencent. "
-            "Install: <code>pip install google-auth</code>"
-        )
-        return msg, msg
     if status == "FAILED":
-        msg = f"FAILED &mdash; {pm.get('error', 'unknown')}"
-        return msg, msg
+        return f"FAILED &mdash; {s5.get('error', 'unknown')}"
     if status == "NO_DATA":
-        msg = "Postmaster API returned no traffic stats (volume may be too low for reputation scoring yet)."
-        return msg, msg
-    return (
-        f"Domain reputation: <strong>{pm.get('domain_rep', 'UNKNOWN')}</strong>",
-        f"IP reputation: <strong>{pm.get('ip_rep', 'UNKNOWN')}</strong>",
-    )
+        return (
+            "HetrixTools returned zero monitors. Add at least one Blacklist Monitor "
+            "at <a href=\"https://hetrixtools.com/blacklist-monitors\">hetrixtools.com</a>."
+        )
+
+    monitors = s5.get("monitors", [])
+    if s5.get("any_listed"):
+        # BAD path — list every monitor with its hit count + report link.
+        # Per §1.21, this is the high-signal path; surface enough for triage.
+        parts = []
+        for m in monitors:
+            label = m["target"]
+            count = m["blacklisted_count"]
+            link = m["report_link"]
+            if count > 0:
+                hit_rbls = ", ".join(m["blacklisted_on"][:5]) or "—"
+                more = (
+                    f" +{len(m['blacklisted_on']) - 5} more"
+                    if len(m["blacklisted_on"]) > 5 else ""
+                )
+                parts.append(
+                    f"<strong>{label}</strong> listed on {count} RBL(s): "
+                    f"{hit_rbls}{more} — <a href=\"{link}\">report</a>"
+                )
+            else:
+                parts.append(f"{label} 0/23 clear")
+        return "<br>".join(parts)
+    else:
+        # HEALTHY path — single-line summary across all monitors.
+        clean_summaries = [f"{m['target']} 0/23" for m in monitors]
+        return (
+            f"All {len(monitors)} monitor(s) clear of all RBLs: " +
+            ", ".join(clean_summaries)
+        )
 
 
-def format_html(surface_3: dict, surface_4: dict, postmaster: dict, today_str: str) -> str:
+def format_html(surface_3: dict, surface_4: dict, surface_5: dict, today_str: str) -> str:
     s3_status = classify_spam_rate(surface_3)
     s4_status = classify_suppression(surface_4)
-    s5_status = classify_postmaster_rep(postmaster.get("domain_rep", STATUS_UNKNOWN))
-    s6_status = classify_postmaster_rep(postmaster.get("ip_rep", STATUS_UNKNOWN))
+    s5_status = classify_hetrixtools(surface_5)
 
     s3_detail = _format_surface_3_detail(surface_3)
     s4_detail = _format_surface_4_detail(surface_4)
-    s5_detail, s6_detail = _format_postmaster_detail(postmaster)
+    s5_detail = _format_surface_5_detail(surface_5)
 
     rows = "\n".join([
         _html_row("Surface 3 &mdash; Spam rate (14d)", s3_status, s3_detail),
         _html_row("Surface 4 &mdash; Suppression WoW", s4_status, s4_detail),
-        _html_row("Surface 5 &mdash; Domain reputation", s5_status, s5_detail),
-        _html_row("Surface 6 &mdash; IP reputation", s6_status, s6_detail),
+        _html_row("Surface 5 &mdash; Blacklist monitor", s5_status, s5_detail),
     ])
 
     return f"""<!DOCTYPE html>
@@ -540,30 +555,32 @@ td.detail {{ color: #4b5563; font-size: 13px; line-height: 1.4; }}
          font-size: 11px; font-weight: 600; }}
 .footer {{ margin-top: 32px; color: #9ca3af; font-size: 11px; line-height: 1.5; }}
 code {{ font-size: 11px; background: #f3f4f6; padding: 1px 4px; border-radius: 3px; }}
+a {{ color: #2563eb; text-decoration: none; }}
+a:hover {{ text-decoration: underline; }}
 </style>
 </head>
 <body>
 <h1>RMP Deliverability Digest</h1>
-<div class="dateline">{today_str} &middot; raisemypresence.com &middot; sender: {POSTMASTER_DOMAIN}</div>
+<div class="dateline">{today_str} &middot; raisemypresence.com &middot; sender: {SENDER_DOMAIN}</div>
 <table>
 {rows}
 </table>
 <div class="footer">
 Auto-generated by <code>deliverability_digest.py</code> &middot; cron <code>0 9 * * *</code> server-local (08:00 Bangkok)<br>
 Thresholds per <code>email-health-audit-runbook.md</code><br>
-Surfaces 1/2/8/9 not included &mdash; SQLite-derived, covered by <code>alert_on_failure.py</code> volume-floor + cron log structure
+Surfaces 1/2/8/9 not included &mdash; SQLite-derived, covered by <code>alert_on_failure.py</code> volume-floor + cron log structure<br>
+Surface 5 source: HetrixTools (Pillar B-1, RMP #50). Surface 6 (Postmaster IP rep) deprecated 2026-05-26 — see module docstring.
 </div>
 </body>
 </html>
 """
 
 
-def format_plain(surface_3: dict, surface_4: dict, postmaster: dict, today_str: str) -> str:
+def format_plain(surface_3: dict, surface_4: dict, surface_5: dict, today_str: str) -> str:
     """Plain-text fallback for clients that don't render HTML."""
     s3_status = classify_spam_rate(surface_3)
     s4_status = classify_suppression(surface_4)
-    s5_status = classify_postmaster_rep(postmaster.get("domain_rep", STATUS_UNKNOWN))
-    s6_status = classify_postmaster_rep(postmaster.get("ip_rep", STATUS_UNKNOWN))
+    s5_status = classify_hetrixtools(surface_5)
 
     s3 = f"Surface 3 -- Spam rate (14d)        : {s3_status}"
     if "spam_rate_pct" in surface_3:
@@ -581,8 +598,27 @@ def format_plain(surface_3: dict, surface_4: dict, postmaster: dict, today_str: 
     elif surface_4.get("wow_status") == "FIRST_RUN":
         s4 += f"    (first run, baseline={surface_4.get('current_total')})"
 
-    s5 = f"Surface 5 -- Domain reputation      : {s5_status}    ({postmaster.get('domain_rep', '?')})"
-    s6 = f"Surface 6 -- IP reputation          : {s6_status}    ({postmaster.get('ip_rep', '?')})"
+    # Surface 5 plain-text
+    s5 = f"Surface 5 -- Blacklist monitor      : {s5_status}"
+    s5_st = surface_5.get("status")
+    if s5_st == "NOT_CONFIGURED":
+        s5 += "    (HETRIXTOOLS_API_KEY not set)"
+    elif s5_st == "FAILED":
+        s5 += f"    (FAILED: {surface_5.get('error', 'unknown')})"
+    elif s5_st == "NO_DATA":
+        s5 += "    (no monitors configured)"
+    else:
+        monitors = surface_5.get("monitors", [])
+        if surface_5.get("any_listed"):
+            s5 += "    (listings detected)"
+            for m in monitors:
+                if m["blacklisted_count"] > 0:
+                    s5 += (
+                        f"\n  - {m['target']}: {m['blacklisted_count']} RBL(s) "
+                        f"[{', '.join(m['blacklisted_on'][:3])}]"
+                    )
+        else:
+            s5 += f"    (all {len(monitors)} monitor(s) clear)"
 
     return f"""RMP Deliverability Digest -- {today_str}
 =================================================
@@ -590,12 +626,12 @@ def format_plain(surface_3: dict, surface_4: dict, postmaster: dict, today_str: 
 {s3}
 {s4}
 {s5}
-{s6}
 
 =================================================
-Sender domain: {POSTMASTER_DOMAIN}
+Sender domain: {SENDER_DOMAIN}
 Auto-generated by deliverability_digest.py
 Thresholds per email-health-audit-runbook.md
+Surface 5: HetrixTools (Pillar B-1, RMP #50). Surface 6 deprecated.
 """
 
 
@@ -656,12 +692,16 @@ def main() -> None:
         f"wow_growth_pct={surface_4.get('wow_growth_pct')}"
     )
 
-    logger.info("Collecting Surfaces 5/6 (Postmaster)...")
-    postmaster = get_postmaster_reputation()
-    logger.info(f"Postmaster: status={postmaster.get('status', 'OK')}")
+    logger.info("Collecting Surface 5 (HetrixTools blacklist)...")
+    surface_5 = get_hetrixtools_blacklist()
+    logger.info(
+        f"Surface 5: status={surface_5.get('status', 'OK')}, "
+        f"total_records={surface_5.get('total_records')}, "
+        f"any_listed={surface_5.get('any_listed')}"
+    )
 
-    html = format_html(surface_3, surface_4, postmaster, today_str)
-    plain = format_plain(surface_3, surface_4, postmaster, today_str)
+    html = format_html(surface_3, surface_4, surface_5, today_str)
+    plain = format_plain(surface_3, surface_4, surface_5, today_str)
 
     if args.dry_run:
         logger.info("--dry-run mode: printing digest to stdout, not sending.")
