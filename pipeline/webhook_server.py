@@ -16,8 +16,10 @@ SendGrid Event Webhook setup:
   4. Enable
 """
 
+import json
 import logging
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -294,7 +296,7 @@ async def stripe_webhook(request: Request):
 
     # 1. Signature verification (400 on failure — no retry)
     try:
-        event = stripe.Webhook.construct_event(
+        stripe.Webhook.construct_event(
             payload=payload,
             sig_header=sig_header,
             secret=STRIPE_WEBHOOK_SECRET,
@@ -302,6 +304,11 @@ async def stripe_webhook(request: Request):
     except (ValueError, stripe.error.SignatureVerificationError) as e:
         logger.warning(f"Stripe signature verification failed: {e}")
         return JSONResponse({"error": "invalid_signature"}, status_code=400)
+
+    # stripe-python v15 StripeObject (Pydantic-based) no longer supports dict-style
+    # .get() access. Signature is already verified above; parse the raw JSON payload
+    # as a plain dict so all downstream .get() access works natively.
+    event = json.loads(payload)
 
     event_id = event.get("id", "")
     event_type = event.get("type", "")
@@ -397,6 +404,34 @@ async def stripe_webhook(request: Request):
 # ---------------------------------------------------------------------------
 
 
+def _stripe_obj_to_dict(obj) -> dict:
+    """
+    Convert a stripe-python StripeObject to a plain dict supporting .get().
+    stripe-python v15+ uses Pydantic models (model_dump); older versions used
+    to_dict_recursive / to_dict. Try in order; fall back to JSON-string parse.
+    """
+    if hasattr(obj, "model_dump"):           # stripe-python v15+ (Pydantic)
+        return obj.model_dump()
+    if hasattr(obj, "to_dict_recursive"):    # older stripe-python
+        return obj.to_dict_recursive()
+    if hasattr(obj, "to_dict"):              # very old stripe-python
+        return obj.to_dict()
+    return json.loads(str(obj))              # last-resort fallback
+
+
+def _compute_order_reference(session_id: str) -> str:
+    """Deterministic order reference for receipts.
+
+    Format: RMP-YYYY-<last 8 chars of session_id, uppercased>.
+    Called from both /api/session/{id} (thank-you page) and
+    _build_kit_email_html (kit delivery email) so page and email
+    show identical references without coordination via DB write.
+
+    UTC year keeps reference stable across server timezones.
+    """
+    return f"RMP-{datetime.now(timezone.utc).year}-{session_id[-8:].upper()}"
+
+
 def _parse_session(event: dict) -> dict:
     """
     Extract fulfillment fields from a checkout.session.completed event.
@@ -439,11 +474,14 @@ def _parse_session(event: dict) -> dict:
         )
     stripe.api_key = STRIPE_API_KEY
     try:
-        full_session = stripe.checkout.Session.retrieve(
+        full_session_obj = stripe.checkout.Session.retrieve(
             session_id, expand=["line_items.data.price"]
         )
     except Exception as e:
         raise _PermanentParseError(f"failed to retrieve session line_items: {e}")
+
+    # Convert StripeObject to plain dict for .get()-based access below.
+    full_session = _stripe_obj_to_dict(full_session_obj)
 
     line_items = (full_session.get("line_items") or {}).get("data") or []
     if not line_items:
@@ -536,6 +574,7 @@ def _fulfill_monthly(purchase: dict) -> dict:
 
 
 def _build_kit_email_html(purchase: dict) -> str:
+    order_ref = _compute_order_reference(purchase["session_id"])
     return (
         '<!DOCTYPE html>'
         '<html><head><meta charset="UTF-8"></head>'
@@ -545,7 +584,8 @@ def _build_kit_email_html(purchase: dict) -> str:
         '<p style="font-size: 16px; line-height: 1.6;">Start with the Fast Track on page 3. Hit every milestone, and you\'ll have the strongest local Google presence in your category.</p>'
         '<p style="font-size: 16px; line-height: 1.6;">If you\'d rather we run this for you each month, page 24 has the details.</p>'
         '<p style="font-size: 16px; line-height: 1.6;">\u2014 The Raise My Presence team</p>'
-        '<p style="font-size: 12px; color: #6B7280; margin-top: 32px;">Questions: <a href="mailto:hello@raisemypresence.com" style="color: #16A34A;">hello@raisemypresence.com</a></p>'
+        f'<p style="font-size: 11px; color: #9CA3AF; margin-top: 24px; letter-spacing: 0.04em;">Order reference: {order_ref}</p>'
+        '<p style="font-size: 12px; color: #6B7280; margin-top: 8px;">Questions: <a href="mailto:hello@raisemypresence.com" style="color: #16A34A;">hello@raisemypresence.com</a></p>'
         '</body></html>'
     )
 
@@ -619,13 +659,118 @@ def _record_permanent_parse_failure(event_id: str, reason: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Block 3 — thank-you.html session lookup API
+# ---------------------------------------------------------------------------
+# Frontend (raisemypresence.com/thank-you) fetches session details for
+# personalization rendering. session_id is in the Stripe Checkout redirect URL.
+# Backend uses STRIPE_API_KEY (secret, server-side) to retrieve sanitized
+# session data with CORS header for the Vercel-hosted origin.
+#
+# Tri-state response:
+#   200 — success                  (sanitized JSON with personalization fields)
+#   400 — invalid session_id format
+#   404 — session not found
+#   410 — session older than 30 min  (prevents enumeration replay)
+#   502 — Stripe API retrieve failure
+
+_THANKYOU_ALLOWED_ORIGIN = "https://raisemypresence.com"
+_SESSION_AGE_CAP_SECONDS = 30 * 60  # 30 minutes
+
+
+def _thankyou_cors() -> dict:
+    return {"Access-Control-Allow-Origin": _THANKYOU_ALLOWED_ORIGIN}
+
+
+@app.get("/api/session/{session_id}")
+async def get_session_for_thankyou(session_id: str):
+    """Return sanitized session data for thank-you page personalization."""
+    if not session_id.startswith("cs_") or len(session_id) < 20:
+        return JSONResponse(
+            {"error": "invalid_session_id"},
+            status_code=400,
+            headers=_thankyou_cors(),
+        )
+
+    if not STRIPE_API_KEY:
+        logger.error("STRIPE_API_KEY not configured for /api/session")
+        return JSONResponse(
+            {"error": "server_misconfigured"},
+            status_code=500,
+            headers=_thankyou_cors(),
+        )
+
+    stripe.api_key = STRIPE_API_KEY
+
+    try:
+        full_session_obj = stripe.checkout.Session.retrieve(
+            session_id, expand=["line_items.data.price"]
+        )
+    except stripe.error.InvalidRequestError:
+        return JSONResponse(
+            {"error": "not_found"},
+            status_code=404,
+            headers=_thankyou_cors(),
+        )
+    except Exception as e:
+        logger.warning(f"/api/session retrieve failed for {session_id}: {e}")
+        return JSONResponse(
+            {"error": "retrieve_failed"},
+            status_code=502,
+            headers=_thankyou_cors(),
+        )
+
+    session = _stripe_obj_to_dict(full_session_obj)
+
+    # Age cap — only return data for sessions <30 min old.
+    created_unix = session.get("created", 0)
+    if created_unix and (time.time() - created_unix) > _SESSION_AGE_CAP_SECONDS:
+        return JSONResponse(
+            {"error": "expired"},
+            status_code=410,
+            headers=_thankyou_cors(),
+        )
+
+    customer_details = session.get("customer_details") or {}
+    collected_info = session.get("collected_information") or {}
+    address = customer_details.get("address") or {}
+
+    email = (
+        customer_details.get("email") or session.get("customer_email") or ""
+    ).strip().lower()
+    business_name = (collected_info.get("business_name") or "").strip()
+    business_city = (address.get("city") or "").strip()
+
+    # Derive tier + locale from lookup_key (option b — _LOOKUP_KEY_MAP is canonical).
+    line_items = (session.get("line_items") or {}).get("data") or []
+    tier = ""
+    locale = ""
+    if line_items:
+        lookup_key = (line_items[0].get("price") or {}).get("lookup_key") or ""
+        mapping = _LOOKUP_KEY_MAP.get(lookup_key)
+        if mapping:
+            tier, locale, _ = mapping
+
+    return JSONResponse(
+        {
+            "email": email,
+            "business_name": business_name,
+            "business_city": business_city,
+            "order_reference": _compute_order_reference(session_id),
+            "tier": tier,
+            "locale": locale,
+        },
+        headers=_thankyou_cors(),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     uvicorn.run(
         "webhook_server:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=WEBHOOK_PORT,
         log_level="info",
     )
