@@ -11,14 +11,16 @@
 #   09:00 CST → 01:00 UTC → 08:00 Bangkok (operator timezone)
 #
 # Fires deliverability_digest.py daily; queries SendGrid Stats + suppression
-# endpoints + (optionally) Google Postmaster Tools; renders HTML+plain-text
-# digest and SendGrid-sends to operator inbox (odedmarketing@gmail.com).
+# endpoints + HetrixTools blacklist API + Postmark DMARC digest (Gmail API);
+# renders HTML+plain-text digest and SendGrid-sends to operator inbox
+# (odedmarketing@gmail.com).
 #
-# Covers Surfaces 3/4/5/6 from email-health-audit-runbook.md:
+# Covers Surfaces 3/4/5/7 from email-health-audit-runbook.md:
 #   3. SendGrid spam complaint rate (14d rolling)
 #   4. Suppression list WoW growth (7-day rolling baseline — RMP #46 patch)
-#   5. Google Postmaster domain reputation (graceful degradation if GCP creds absent)
-#   6. Google Postmaster IP reputation (same)
+#   5. HetrixTools blacklist monitor — domain + IP across ~23 RBLs (Pillar B-1, RMP #50; replaced Postmaster v1)
+#   6. DEPRECATED — Postmaster v1 IP reputation surface EOL'd by Google, no v2 replacement (RMP #50)
+#   7. Postmark DMARC authentication health — Gmail-polled weekly digest (Pillar B-2, RMP #51)
 #
 # Surfaces 1/2/8/9 are covered separately by alert_on_failure.py volume-floor
 # alerter + per-market cron log structure.
