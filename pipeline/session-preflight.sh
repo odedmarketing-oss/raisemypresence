@@ -67,8 +67,12 @@ fi
 # 3. Last surface verdicts (informational — full detail lands in the digest email).
 echo "--- 3. last surface verdicts (info) ---"
 if [ -f "$DIGEST_LOG" ]; then
+  LAST_S3=$(grep "Surface 3:" "$DIGEST_LOG" | tail -1 | sed 's/.*Surface 3:/Surface 3:/')
+  LAST_S4=$(grep "Surface 4:" "$DIGEST_LOG" | tail -1 | sed 's/.*Surface 4:/Surface 4:/')
   LAST_S5=$(grep "Surface 5:" "$DIGEST_LOG" | tail -1 | sed 's/.*Surface 5:/Surface 5:/')
   LAST_S7=$(grep "Surface 7:" "$DIGEST_LOG" | tail -1 | sed 's/.*Surface 7:/Surface 7:/')
+  if [ -n "$LAST_S3" ]; then echo "preflight: ${LAST_S3}"; else echo "preflight: surface_3 verdict=NO_DATA"; fi
+  if [ -n "$LAST_S4" ]; then echo "preflight: ${LAST_S4}"; else echo "preflight: surface_4 verdict=NO_DATA"; fi
   if [ -n "$LAST_S5" ]; then echo "preflight: ${LAST_S5}"; else echo "preflight: surface_5 verdict=NO_DATA"; fi
   if [ -n "$LAST_S7" ]; then echo "preflight: ${LAST_S7}"; else echo "preflight: surface_7 verdict=NO_DATA"; fi
 else
