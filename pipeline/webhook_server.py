@@ -16,12 +16,14 @@ SendGrid Event Webhook setup:
   4. Enable
 """
 
+import html
 import json
 import logging
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import stripe
 import uvicorn
@@ -32,6 +34,7 @@ from config import (
     WEBHOOK_PORT,
     STRIPE_WEBHOOK_SECRET, STRIPE_API_KEY, KIT_PDF_DIR,
 )
+from unsubscribe import verify_unsub_token
 from suppression import add_suppression, is_suppressed
 from purchase_log import (
     is_already_fulfilled, insert_pending, mark_fulfilled, mark_failed,
@@ -231,24 +234,106 @@ _ERROR_HTML = """<!DOCTYPE html>
 </html>"""
 
 
+_CONFIRM_UNSUB_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Unsubscribe — Raise My Presence</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #F9FAFB; color: #111827;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 20px;
+        }
+        .card {
+            background: #FFFFFF; border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 48px 40px; max-width: 480px; text-align: center;
+        }
+        h1 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+        p { font-size: 15px; color: #6B7280; line-height: 1.6; margin-bottom: 24px; }
+        .email { font-weight: 600; color: #111827; }
+        button {
+            font: inherit; font-weight: 600; font-size: 15px;
+            color: #FFFFFF; background: #16A34A; border: none;
+            border-radius: 10px; padding: 14px 28px; cursor: pointer;
+        }
+        button:hover { background: #15803D; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Unsubscribe?</h1>
+        <p>
+            Click below to remove <span class="email">{email}</span> from our
+            mailing list. You won't receive any more audit reports from
+            Raise My Presence.
+        </p>
+        <form method="POST" action="{action}">
+            <button type="submit">Unsubscribe</button>
+        </form>
+    </div>
+</body>
+</html>"""
+
+
 @app.get("/webhook/unsubscribe")
-async def unsubscribe(email: str = Query(default="")):
+async def unsubscribe_get(email: str = Query(default=""), t: str = Query(default="")):
     """
-    One-click unsubscribe endpoint.
-    URL format: /webhook/unsubscribe?email=user@example.com
+    Render the unsubscribe CONFIRM page. NEVER mutates state — prefetch-safe
+    (mail-scanner GETs cannot unsubscribe anyone). The actual opt-out happens
+    on POST to this same URL (confirm button or RFC 8058 one-click).
+
+    `t` is the HMAC token from new sends. Legacy links without a token are
+    still honored via the confirm -> POST flow (CAN-SPAM backward-compat).
+    A token that is present but invalid is treated as tampering and rejected.
     """
     email = email.strip().lower()
 
     if not email or "@" not in email:
         return HTMLResponse(_ERROR_HTML, status_code=400)
 
+    if t and not verify_unsub_token(email, t):
+        logger.warning(f"Unsubscribe GET: invalid token for {email}")
+        return HTMLResponse(_ERROR_HTML, status_code=400)
+
     if is_suppressed(email):
-        logger.debug(f"Unsubscribe: already suppressed — {email}")
         return HTMLResponse(_ALREADY_UNSUB_HTML)
 
-    add_suppression(email, reason="unsubscribe")
-    logger.info(f"Unsubscribed: {email}")
-    return HTMLResponse(_UNSUB_HTML.replace("{email}", email))
+    action = f"/webhook/unsubscribe?email={quote(email)}"
+    if t:
+        action += f"&t={quote(t)}"
+    page = _CONFIRM_UNSUB_HTML.replace("{email}", html.escape(email)).replace("{action}", action)
+    return HTMLResponse(page)
+
+
+@app.post("/webhook/unsubscribe")
+async def unsubscribe_post(email: str = Query(default=""), t: str = Query(default="")):
+    """
+    Perform the unsubscribe — the ONLY mutating path. Reached two ways:
+      - the confirm-page button (form POST carrying email + token in the URL)
+      - RFC 8058 List-Unsubscribe-Post one-click (provider POSTs the header URL)
+    Both carry email + token as query params, so we read them the same way.
+    """
+    email = email.strip().lower()
+
+    if not email or "@" not in email:
+        return HTMLResponse(_ERROR_HTML, status_code=400)
+
+    if t and not verify_unsub_token(email, t):
+        logger.warning(f"Unsubscribe POST: invalid token for {email}")
+        return HTMLResponse(_ERROR_HTML, status_code=400)
+
+    if is_suppressed(email):
+        return HTMLResponse(_ALREADY_UNSUB_HTML)
+
+    reason = "unsubscribe" if t else "unsubscribe_legacy"
+    add_suppression(email, reason=reason)
+    logger.info(f"Unsubscribed: {email} ({reason})")
+    return HTMLResponse(_UNSUB_HTML.replace("{email}", html.escape(email)))
 
 
 # ---------------------------------------------------------------------------

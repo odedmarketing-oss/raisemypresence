@@ -25,6 +25,7 @@ from config import (
     SENDGRID_API_KEY, FROM_EMAIL, FROM_NAME,
     DRY_RUN, DRY_RUN_RECIPIENT,
 )
+from unsubscribe import unsubscribe_url
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,14 @@ def send_report(
 
         # Custom header for tracking in webhook events
         message.header = Header("X-RMP-Business", business_name[:64])
+
+        # RFC 8058 one-click unsubscribe + List-Unsubscribe (prefetch-safe, deliverability)
+        unsub_link = unsubscribe_url(recipient_email)
+        message.header = Header(
+            "List-Unsubscribe",
+            f"<{unsub_link}>, <mailto:hello@raisemypresence.com?subject=Unsubscribe>",
+        )
+        message.header = Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
 
         if use_dry_run:
             # Add original recipient info so operator can see who it would have gone to

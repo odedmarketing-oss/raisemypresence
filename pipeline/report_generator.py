@@ -38,6 +38,8 @@ from datetime import date
 from urllib.parse import quote
 import re
 
+from unsubscribe import unsubscribe_url
+
 
 # ---------------------------------------------------------------------------
 # Scoring system — Whitespark 2026 sourced weights
@@ -444,9 +446,9 @@ def generate_report(business: dict, recipient_email: str = "", locale: str = "US
 
     name_encoded = quote(name)
 
-    # Build unsubscribe link — one-click webhook if recipient known, mailto fallback
+    # Build unsubscribe link — signed one-click webhook if recipient known, mailto fallback
     if recipient_email:
-        unsub_url = f"https://webhooks.raisemypresence.com/webhook/unsubscribe?email={quote(recipient_email)}"
+        unsub_url = unsubscribe_url(recipient_email)
     else:
         unsub_url = f"mailto:hello@raisemypresence.com?subject=Unsubscribe%20-%20{name_encoded}"
 

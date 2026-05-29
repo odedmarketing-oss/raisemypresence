@@ -20,8 +20,13 @@ SCAN_DIR = Path("/root/audit-scanner")
 # ---------------------------------------------------------------------------
 # Auto-load .env from pipeline directory
 # Replaces manual `source .env && export SENDGRID_API_KEY` step
+#
+# override=True is critical: pm2 may have cached stale env vars from earlier
+# process launches (e.g., a rotated SENDGRID_API_KEY). Without override, the
+# stale pm2-injected values win over the current .env file. With override,
+# the .env file is always the source of truth.
 # ---------------------------------------------------------------------------
-load_dotenv(PIPELINE_DIR / ".env")
+load_dotenv(PIPELINE_DIR / ".env", override=True)
 
 # ---------------------------------------------------------------------------
 # SendGrid
@@ -54,6 +59,8 @@ DISCOVERY_RATE_LIMIT = float(os.environ.get("DISCOVERY_RATE_LIMIT", "1.0"))  # s
 WEBHOOK_PORT = int(os.environ.get("WEBHOOK_PORT", "8099"))
 WEBHOOK_BASE_URL = os.environ.get("WEBHOOK_BASE_URL", "http://43.134.33.213:8099")
 SENDGRID_WEBHOOK_VERIFY_KEY = os.environ.get("SENDGRID_WEBHOOK_VERIFY_KEY", "")
+# HMAC secret for signing unsubscribe links (set in .env; both sender + webhook use it)
+UNSUBSCRIBE_HMAC_SECRET = os.environ.get("UNSUBSCRIBE_HMAC_SECRET", "")
 
 # ---------------------------------------------------------------------------
 # Stripe (Block 4 — webhook fulfillment)
