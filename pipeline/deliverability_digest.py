@@ -1185,14 +1185,23 @@ def main() -> None:
 
     logger.info("Collecting Surface 3 (spam rate, 14d)...")
     surface_3 = get_spam_rate_14d()
-    logger.info(f"Surface 3: {surface_3}")
+    s3_verdict = classify_spam_rate(surface_3)
+    logger.info(
+        f"Surface 3: verdict={s3_verdict}, "
+        f"comparison_state={surface_3.get('status', 'OK')}, "
+        f"spam_reports={surface_3.get('spam_reports')}, "
+        f"delivered={surface_3.get('delivered')}, "
+        f"spam_rate_pct={surface_3.get('spam_rate_pct')}"
+    )
 
     logger.info("Collecting Surface 4 (suppression WoW)...")
     surface_4 = get_suppression_surface()
+    s4_verdict = classify_suppression(surface_4)
     logger.info(
-        f"Surface 4: current_total={surface_4.get('current_total')}, "
+        f"Surface 4: verdict={s4_verdict}, "
+        f"comparison_state={surface_4.get('wow_status', 'OK')}, "
+        f"current_total={surface_4.get('current_total')}, "
         f"baseline={surface_4.get('baseline')}, "
-        f"wow_status={surface_4.get('wow_status')}, "
         f"wow_growth_pct={surface_4.get('wow_growth_pct')}"
     )
 
