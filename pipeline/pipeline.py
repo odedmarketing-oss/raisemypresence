@@ -218,6 +218,7 @@ def process_business(business: dict, dry_run: bool) -> dict:
             score=score,
             dry_run=dry_run,
             status="sent",
+            sendgrid_message_id=send_result.get("sendgrid_message_id"),
         )
         result["status"] = "sent"
     else:

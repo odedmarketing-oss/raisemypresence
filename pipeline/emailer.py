@@ -106,6 +106,16 @@ def send_report(
         status = response.status_code
         success = 200 <= status < 300
 
+        # Capture SendGrid X-Message-Id — the join key for engagement telemetry
+        # (RMP #55, Part 1). response.headers is a case-insensitive store; fall
+        # back defensively so a header-shape change never breaks a send.
+        sg_message_id = None
+        try:
+            hdrs = response.headers
+            sg_message_id = hdrs.get("X-Message-Id") if hasattr(hdrs, "get") else dict(hdrs).get("X-Message-Id")
+        except Exception:
+            sg_message_id = None
+
         if success:
             mode = "DRY-RUN" if use_dry_run else "LIVE"
             logger.info(
@@ -123,6 +133,7 @@ def send_report(
             "status_code": status,
             "recipient": actual_recipient,
             "error": None if success else f"HTTP {status}",
+            "sendgrid_message_id": sg_message_id,
         }
 
     except Exception as e:

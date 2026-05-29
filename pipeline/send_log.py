@@ -18,14 +18,15 @@ def _get_conn() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sent_log (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            place_id   TEXT    NOT NULL,
-            email      TEXT    NOT NULL,
-            subject    TEXT,
-            score      INTEGER,
-            sent_at    TEXT    NOT NULL,
-            dry_run    INTEGER NOT NULL DEFAULT 0,
-            status     TEXT    DEFAULT 'sent',
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            place_id             TEXT    NOT NULL,
+            email                TEXT    NOT NULL,
+            subject              TEXT,
+            score                INTEGER,
+            sent_at              TEXT    NOT NULL,
+            dry_run              INTEGER NOT NULL DEFAULT 0,
+            status               TEXT    DEFAULT 'sent',
+            sendgrid_message_id  TEXT,
             UNIQUE(place_id, email)
         )
     """)
@@ -33,6 +34,13 @@ def _get_conn() -> sqlite3.Connection:
         CREATE INDEX IF NOT EXISTS idx_sent_log_date
         ON sent_log(sent_at)
     """)
+    # Idempotent migration (RMP #55): CREATE TABLE IF NOT EXISTS won't add a
+    # column to a pre-existing table, so ALTER it in if missing. Self-heals on
+    # every connection; survives a RECOVERY.md rebuild. ADD COLUMN is
+    # non-destructive (nullable, no data move) so dedup integrity is preserved.
+    _cols = [r[1] for r in conn.execute("PRAGMA table_info(sent_log)").fetchall()]
+    if "sendgrid_message_id" not in _cols:
+        conn.execute("ALTER TABLE sent_log ADD COLUMN sendgrid_message_id TEXT")
     conn.commit()
     return conn
 
@@ -70,7 +78,8 @@ def log_send(
     subject: str = "",
     score: int = 0,
     dry_run: bool = False,
-    status: str = "sent"
+    status: str = "sent",
+    sendgrid_message_id: str = "",
 ) -> bool:
     """
     Record a send. Returns True on success, False if duplicate.
@@ -78,8 +87,8 @@ def log_send(
     conn = _get_conn()
     try:
         conn.execute(
-            """INSERT INTO sent_log (place_id, email, subject, score, sent_at, dry_run, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO sent_log (place_id, email, subject, score, sent_at, dry_run, status, sendgrid_message_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 place_id,
                 email.lower(),
@@ -88,6 +97,7 @@ def log_send(
                 datetime.now(timezone.utc).isoformat(),
                 int(dry_run),
                 status,
+                sendgrid_message_id,
             )
         )
         conn.commit()
