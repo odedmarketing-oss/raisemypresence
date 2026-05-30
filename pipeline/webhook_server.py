@@ -36,6 +36,7 @@ from config import (
 )
 from unsubscribe import verify_unsub_token
 from suppression import add_suppression, is_suppressed
+from email_events import insert_event
 from purchase_log import (
     is_already_fulfilled, insert_pending, mark_fulfilled, mark_failed,
 )
@@ -97,12 +98,35 @@ async def sendgrid_webhook(request: Request):
         events = [events]
 
     suppressed_count = 0
+    logged_count = 0
 
     for event in events:
         event_type = event.get("event", "")
         email = event.get("email", "")
         reason = event.get("reason", "")
         bounce_type = event.get("type", "")
+
+        # Telemetry Part 2 (RMP #56): log EVERY event type to the append-only
+        # email_events table, keyed on sg_message_id (join key to sent_log).
+        # This runs ABOVE the suppression filter so engagement events
+        # (delivered/open/click/spam/unsubscribe) are captured too. Wrapped so a
+        # logging failure can never break suppression handling or force a non-2xx
+        # (which would make SendGrid retry the whole batch).
+        try:
+            ts_raw = event.get("timestamp")
+            if ts_raw is not None:
+                event_ts = datetime.fromtimestamp(int(ts_raw), tz=timezone.utc).isoformat()
+            else:
+                event_ts = datetime.now(timezone.utc).isoformat()
+            insert_event(
+                sg_message_id=event.get("sg_message_id", ""),
+                event_type=event_type or "unknown",
+                timestamp=event_ts,
+                payload_json=json.dumps(event),
+            )
+            logged_count += 1
+        except Exception as e:
+            logger.warning(f"email_events log failed (non-fatal): {e}")
 
         if not email:
             continue
@@ -122,7 +146,7 @@ async def sendgrid_webhook(request: Request):
         else:
             logger.debug(f"Already suppressed: {email}")
 
-    return {"status": "ok", "suppressed": suppressed_count}
+    return {"status": "ok", "suppressed": suppressed_count, "logged": logged_count}
 
 
 # ---------------------------------------------------------------------------
