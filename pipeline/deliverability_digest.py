@@ -46,6 +46,7 @@ Surface 7 added RMP #51, 2026-05-27 (Pillar B-2).
 """
 
 import argparse
+import json
 import logging
 import os
 import re
@@ -254,20 +255,33 @@ def _read_baseline() -> Optional[dict]:
     if not SUPPRESSION_BASELINE_FILE.exists():
         return None
     try:
-        line = SUPPRESSION_BASELINE_FILE.read_text().strip()
-        parts = line.split()
+        raw = SUPPRESSION_BASELINE_FILE.read_text().strip()
+        if not raw:
+            return None
+        # JSON-first (new format: {"date","count","breakdown"}); fall back to the
+        # legacy "DATE COUNT" line so the existing baseline reads clean until the
+        # next 7-day refresh rewrites it as JSON (graceful migration, no gap).
+        if raw.lstrip().startswith("{"):
+            obj = json.loads(raw)
+            return {
+                "date": obj["date"],
+                "count": int(obj["count"]),
+                "breakdown": obj.get("breakdown"),  # None on legacy-upgraded rows
+            }
+        parts = raw.split()
         if len(parts) != 2:
             return None
-        return {"date": parts[0], "count": int(parts[1])}
+        return {"date": parts[0], "count": int(parts[1]), "breakdown": None}
     except Exception as e:
         logger.warning(f"Failed to parse suppression baseline file: {e}")
         return None
 
 
-def _write_baseline(count: int) -> None:
+def _write_baseline(count: int, breakdown: Optional[dict] = None) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     today = date.today().isoformat()
-    SUPPRESSION_BASELINE_FILE.write_text(f"{today} {count}\n")
+    payload = {"date": today, "count": count, "breakdown": breakdown or {}}
+    SUPPRESSION_BASELINE_FILE.write_text(json.dumps(payload) + "\n")
 
 
 def get_suppression_surface() -> dict:
@@ -338,7 +352,7 @@ def get_suppression_surface() -> dict:
 
     if should_write_baseline:
         try:
-            _write_baseline(total)
+            _write_baseline(total, breakdown)
         except Exception as e:
             logger.error(f"Failed to update suppression baseline: {e}")
 
@@ -350,6 +364,22 @@ def get_suppression_surface() -> dict:
             result["baseline_age_days"] = (date.today() - baseline_date).days
         except Exception:
             pass
+
+    # Per-category WoW (Scope A — signal-add only; verdict logic unchanged).
+    # Computable only once the baseline carries a stored breakdown; legacy-format
+    # baselines (breakdown=None) render current-counts-only until the next 7-day
+    # refresh writes a JSON baseline with per-category counts.
+    baseline_breakdown = baseline.get("breakdown") if baseline else None
+    if baseline_breakdown:
+        bw = {}
+        for label, curr in breakdown.items():
+            prior = baseline_breakdown.get(label, 0)
+            delta = curr - prior
+            pct = (delta / prior * 100) if prior else None
+            bw[label] = {"curr": curr, "prior": prior, "delta": delta, "pct": pct}
+        result["breakdown_wow"] = bw
+    else:
+        result["breakdown_wow"] = None
 
     return result
 
@@ -929,17 +959,51 @@ def _format_surface_3_detail(s3: dict) -> str:
     )
 
 
+def _format_suppression_breakdown_html(s4: dict) -> str:
+    """
+    Scope A signal-add: render per-category suppression composition
+    (bounces / blocks / invalid_emails / spam_reports / global_unsubscribes)
+    with per-category WoW when the baseline carries a breakdown. All five
+    categories always shown so spam_reports=0 is explicit (the key disposition
+    input). Returns an HTML fragment appended to the Surface 4 detail cell.
+    """
+    breakdown = s4.get("breakdown") or {}
+    if not breakdown:
+        return ""
+    bw = s4.get("breakdown_wow")
+    label_order = [label for _, label in SUPPRESSION_ENDPOINTS]
+    parts = []
+    for label in label_order:
+        curr = breakdown.get(label, 0)
+        disp = label.replace("_", " ")
+        if bw and label in bw:
+            d = bw[label]
+            if d["pct"] is not None:
+                parts.append(f"{disp} {curr} ({d['delta']:+d}, {d['pct']:+.1f}%)")
+            else:
+                parts.append(f"{disp} {curr} ({d['delta']:+d})")
+        else:
+            parts.append(f"{disp} {curr}")
+    note = "" if bw else " &middot; <em>per-category WoW from next 7-day baseline</em>"
+    return (
+        f'<br><span style="color:#6b7280;font-size:12px;">'
+        f'{" &middot; ".join(parts)}{note}</span>'
+    )
+
+
 def _format_surface_4_detail(s4: dict) -> str:
     if s4.get("status") == "FAILED":
         return f"FAILED &mdash; {s4.get('error', 'unknown')}"
+    breakdown_html = _format_suppression_breakdown_html(s4)
     wow = s4.get("wow_status")
     if wow == "FIRST_RUN":
         return (
             f"First run &mdash; baseline established at {s4['current_total']} suppressions. "
             f"Comparison delta builds daily; full WoW delta at day 7."
+            f"{breakdown_html}"
         )
     if wow == "BASELINE_ZERO":
-        return f"Current = {s4['current_total']}; prior baseline was 0."
+        return f"Current = {s4['current_total']}; prior baseline was 0.{breakdown_html}"
     prior = s4["baseline"]["count"]
     curr = s4["current_total"]
     growth = s4["wow_growth_pct"]
@@ -948,6 +1012,7 @@ def _format_surface_4_detail(s4: dict) -> str:
     return (
         f"{curr} today vs {prior} on {s4['baseline']['date']}{age_str} "
         f"({curr - prior:+d}, {growth:+.1f}%)"
+        f"{breakdown_html}"
     )
 
 
@@ -1077,6 +1142,25 @@ def format_plain(surface_3: dict, surface_4: dict, surface_5: dict, surface_7: d
         )
     elif surface_4.get("wow_status") == "FIRST_RUN":
         s4 += f"    (first run, baseline={surface_4.get('current_total')})"
+    # Per-category composition (Scope A signal-add; verdict unchanged)
+    _bd = surface_4.get("breakdown") or {}
+    if _bd:
+        _bw = surface_4.get("breakdown_wow")
+        _order = [label for _, label in SUPPRESSION_ENDPOINTS]
+        _parts = []
+        for _lbl in _order:
+            _curr = _bd.get(_lbl, 0)
+            if _bw and _lbl in _bw:
+                _d = _bw[_lbl]
+                if _d["pct"] is not None:
+                    _parts.append(f"{_lbl}={_curr}({_d['delta']:+d},{_d['pct']:+.1f}%)")
+                else:
+                    _parts.append(f"{_lbl}={_curr}({_d['delta']:+d})")
+            else:
+                _parts.append(f"{_lbl}={_curr}")
+        s4 += "\n  composition: " + ", ".join(_parts)
+        if not _bw:
+            s4 += "  (per-category WoW from next 7-day baseline)"
 
     # Surface 5 plain-text
     s5 = f"Surface 5 -- Blacklist monitor      : {s5_status}"
