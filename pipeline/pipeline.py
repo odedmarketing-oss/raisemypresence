@@ -22,6 +22,7 @@ All safety controls enforced:
 """
 
 import os
+import secrets
 import sys
 import json
 import time
@@ -195,8 +196,12 @@ def process_business(business: dict, dry_run: bool) -> dict:
     result["email"] = target_email
 
     # --- Step 4: Generate report ---
+    # Per-send attribution token (RMP #61, Telemetry Part 4, A1): random URL-safe
+    # value embedded in the CTA link; echoed back by Stripe as client_reference_id
+    # on purchase and stored in sent_log.rmp_token for the join.
+    rmp_token = secrets.token_hex(8)
     locale = detect_locale(business.get("address", ""))
-    html_report = generate_report(business, recipient_email=target_email, locale=locale)
+    html_report = generate_report(business, recipient_email=target_email, locale=locale, rmp_token=rmp_token)
     subject = generate_subject(score, locale=locale)
 
     # --- Step 5: Send ---
@@ -219,6 +224,7 @@ def process_business(business: dict, dry_run: bool) -> dict:
             dry_run=dry_run,
             status="sent",
             sendgrid_message_id=send_result.get("sendgrid_message_id"),
+            rmp_token=rmp_token,
         )
         result["status"] = "sent"
     else:

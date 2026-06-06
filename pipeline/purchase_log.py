@@ -57,12 +57,20 @@ def _get_conn() -> sqlite3.Connection:
             received_at         TEXT NOT NULL,
             fulfilled_at        TEXT,
             fulfillment_status  TEXT NOT NULL DEFAULT 'processing',
-            error_message       TEXT
+            error_message       TEXT,
+            client_reference_id TEXT
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_purchase_log_email ON purchase_log(email)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_purchase_log_status ON purchase_log(fulfillment_status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_purchase_log_received ON purchase_log(received_at)")
+    # Idempotent migration (RMP #61, Telemetry Part 4): CREATE TABLE IF NOT
+    # EXISTS won't add a column to a pre-existing table, so ALTER it in if
+    # missing. Mirrors send_log.py. Non-destructive (nullable). Carries the
+    # per-send attribution token Stripe echoes back as client_reference_id.
+    _cols = [r[1] for r in conn.execute("PRAGMA table_info(purchase_log)").fetchall()]
+    if "client_reference_id" not in _cols:
+        conn.execute("ALTER TABLE purchase_log ADD COLUMN client_reference_id TEXT")
     conn.commit()
     return conn
 
@@ -98,6 +106,7 @@ def insert_pending(
     currency: str,
     payment_method: str,
     purchased_at: str,
+    client_reference_id: str = "",
 ) -> bool:
     """
     Insert a new purchase row with fulfillment_status='processing'.
@@ -114,8 +123,9 @@ def insert_pending(
             """INSERT OR IGNORE INTO purchase_log (
                    stripe_event_id, stripe_session_id, email, business_name,
                    business_city, product, locale, amount_cents, currency,
-                   payment_method, purchased_at, received_at, fulfillment_status
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   payment_method, purchased_at, received_at, fulfillment_status,
+                   client_reference_id
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 stripe_event_id,
                 stripe_session_id,
@@ -130,6 +140,7 @@ def insert_pending(
                 purchased_at,
                 datetime.now(timezone.utc).isoformat(),
                 STATUS_PROCESSING,
+                client_reference_id or "",
             )
         )
         conn.commit()

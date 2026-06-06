@@ -341,7 +341,7 @@ def _build_recommendations(breakdown: dict, locale: str = "US") -> list:
 # HTML builder — table-based, inline styles, email-client safe
 # ---------------------------------------------------------------------------
 
-def generate_report(business: dict, recipient_email: str = "", locale: str = "US") -> str:
+def generate_report(business: dict, recipient_email: str = "", locale: str = "US", rmp_token: str = "") -> str:
     """
     Generate a branded HTML audit report for a single business.
 
@@ -351,6 +351,10 @@ def generate_report(business: dict, recipient_email: str = "", locale: str = "US
             webhook endpoint instead of mailto.
         locale: One of "US", "UK", "AU", "NZ". Controls spelling,
             compliance text, and credibility signals.
+        rmp_token: Per-send attribution token (RMP #61, Telemetry Part 4). If
+            provided, the CTA links to raisemypresence.com/?rmp={token}#pricing;
+            Stripe echoes it back as client_reference_id on purchase. Falls back
+            to the plain homepage link if absent.
 
     Returns:
         str: Complete self-contained HTML document (table-based, inline styles).
@@ -452,8 +456,14 @@ def generate_report(business: dict, recipient_email: str = "", locale: str = "US
     else:
         unsub_url = f"mailto:hello@raisemypresence.com?subject=Unsubscribe%20-%20{name_encoded}"
 
-    # CTA mailto
-    cta_url = f"mailto:hello@raisemypresence.com?subject=Fix%20my%20Google%20profile%20-%20{name_encoded}"
+    # CTA -> own-domain funnel link (RMP #61, Telemetry Part 4). The per-send
+    # token rides as a clean query param; Stripe echoes it back as
+    # client_reference_id on purchase. NO checkout/redirect link in the email
+    # itself (cold-email deliverability / domain-reputation priority).
+    if rmp_token:
+        cta_url = f"https://raisemypresence.com/?rmp={rmp_token}#pricing"
+    else:
+        cta_url = "https://raisemypresence.com/#pricing"
 
     return f"""<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">

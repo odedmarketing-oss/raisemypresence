@@ -454,6 +454,7 @@ async def stripe_webhook(request: Request):
         currency=purchase["currency"],
         payment_method=purchase["payment_method"],
         purchased_at=purchase["purchased_at"],
+        client_reference_id=purchase["client_reference_id"],
     )
     if not inserted:
         if is_already_fulfilled(event_id):
@@ -551,6 +552,7 @@ def _parse_session(event: dict) -> dict:
         raise _PermanentParseError("event.data.object is not a checkout.session")
 
     session_id = session.get("id", "")
+    client_reference_id = (session.get("client_reference_id") or "").strip()
     customer_details = session.get("customer_details") or {}
     collected_info = session.get("collected_information") or {}
     address = customer_details.get("address") or {}
@@ -616,6 +618,7 @@ def _parse_session(event: dict) -> dict:
 
     return {
         "session_id": session_id,
+        "client_reference_id": client_reference_id,
         "email": email,
         "business_name": business_name,
         "business_city": business_city,

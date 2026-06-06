@@ -27,6 +27,7 @@ def _get_conn() -> sqlite3.Connection:
             dry_run              INTEGER NOT NULL DEFAULT 0,
             status               TEXT    DEFAULT 'sent',
             sendgrid_message_id  TEXT,
+            rmp_token            TEXT,
             UNIQUE(place_id, email)
         )
     """)
@@ -41,6 +42,10 @@ def _get_conn() -> sqlite3.Connection:
     _cols = [r[1] for r in conn.execute("PRAGMA table_info(sent_log)").fetchall()]
     if "sendgrid_message_id" not in _cols:
         conn.execute("ALTER TABLE sent_log ADD COLUMN sendgrid_message_id TEXT")
+    # Per-send attribution token (RMP #61, Telemetry Part 4): embedded in the
+    # outreach CTA link, echoed back by Stripe as client_reference_id on purchase.
+    if "rmp_token" not in _cols:
+        conn.execute("ALTER TABLE sent_log ADD COLUMN rmp_token TEXT")
     conn.commit()
     return conn
 
@@ -80,6 +85,7 @@ def log_send(
     dry_run: bool = False,
     status: str = "sent",
     sendgrid_message_id: str = "",
+    rmp_token: str = "",
 ) -> bool:
     """
     Record a send. Returns True on success, False if duplicate.
@@ -87,8 +93,8 @@ def log_send(
     conn = _get_conn()
     try:
         conn.execute(
-            """INSERT INTO sent_log (place_id, email, subject, score, sent_at, dry_run, status, sendgrid_message_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO sent_log (place_id, email, subject, score, sent_at, dry_run, status, sendgrid_message_id, rmp_token)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 place_id,
                 email.lower(),
@@ -98,6 +104,7 @@ def log_send(
                 int(dry_run),
                 status,
                 sendgrid_message_id,
+                rmp_token,
             )
         )
         conn.commit()

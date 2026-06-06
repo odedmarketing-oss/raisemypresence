@@ -994,6 +994,25 @@ const observer = new IntersectionObserver((entries) => {
 document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
 </script>
 
+<script>
+// RMP #61 (Telemetry Part 4 — B1, URL-param-only): if the visitor arrived from
+// an outreach email (?rmp=<token>), attach that token to the Stripe Payment
+// Links as client_reference_id. Stripe echoes it back on
+// checkout.session.completed, joining the purchase to the exact send
+// (sent_log.rmp_token). No cookies / no storage.
+(function () {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('rmp');
+    if (!token || !/^[A-Za-z0-9_-]{1,64}$/.test(token)) return;
+    var links = document.querySelectorAll('a[href^="https://buy.stripe.com/"]');
+    for (var i = 0; i < links.length; i++) {
+        var u = new URL(links[i].href);
+        u.searchParams.set('client_reference_id', token);
+        links[i].href = u.toString();
+    }
+})();
+</script>
+
 <script src="locale-system.js"></script>
 </body>
 </html>
