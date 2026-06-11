@@ -50,11 +50,14 @@ from unsubscribe import unsubscribe_url
 #   Reviews     18 — Part of ~20% review signal weight (Whitespark 2026)
 #   Rating      12 — Top conversion factor (Whitespark)
 #   Hours       15 — More influential than additional categories (Whitespark)
-#   Description 12 — Google docs + Localo 2M profile study
 #   Photos      12 — Engagement signal
 #   Website      8 — NAP/relevance signal
 #   Phone        3 — Basic NAP, near-universal, low differentiation
-#   TOTAL      100
+#   TOTAL       88 raw — displayed normalized to a /100 scale
+#
+# Description factor removed RMP #65: Places API editorialSummary is Google's
+# editorial blurb (not the owner-writable GBP description) — scanning it cannot
+# verify description state, so scoring/recommending it was inaccurate.
 
 SCORE_FACTORS = [
     # (breakdown_key, display_name, max_points)
@@ -62,13 +65,16 @@ SCORE_FACTORS = [
     ("reviews",      "Review Count",           18),
     ("rating",       "Star Rating",            12),
     ("hours",        "Business Hours",         15),
-    ("description",  "Business Description",   12),
     ("photos",       "Photos",                 12),
     ("website",      "Website",                 8),
     ("phone",        "Phone Number",            3),
 ]
 
 SCORE_FACTOR_MAP = {k: m for k, _, m in SCORE_FACTORS}
+
+# Max raw score after description-factor removal (= 88). Raw totals are
+# normalized to a /100 percentage for all displayed scores.
+MAX_SCORE = sum(m for _, _, m in SCORE_FACTORS)
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +164,7 @@ def recompute_score(breakdown: dict) -> int:
     for key, _, maximum in SCORE_FACTORS:
         earned = breakdown.get(key, 0)
         total += min(earned, maximum)
-    return min(100, total)
+    return min(MAX_SCORE, total)
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +241,6 @@ def _build_recommendations(breakdown: dict, locale: str = "US") -> list:
     rev = min(breakdown.get("reviews", 0), SCORE_FACTOR_MAP["reviews"])
     rat = min(breakdown.get("rating", 0), SCORE_FACTOR_MAP["rating"])
     hrs = min(breakdown.get("hours", 0), SCORE_FACTOR_MAP["hours"])
-    desc = min(breakdown.get("description", 0), SCORE_FACTOR_MAP["description"])
     pho = min(breakdown.get("photos", 0), SCORE_FACTOR_MAP["photos"])
     web = min(breakdown.get("website", 0), SCORE_FACTOR_MAP["website"])
     phn = min(breakdown.get("phone", 0), SCORE_FACTOR_MAP["phone"])
@@ -293,14 +298,6 @@ def _build_recommendations(breakdown: dict, locale: str = "US") -> list:
             f"count by local SEO experts (Whitespark 2026). Google {loc['prioritises']} businesses shown "
             "as open at the time of search. Missing hours makes you invisible for "
             "time-sensitive searches."
-        ))
-
-    if desc == 0:
-        recs.append((
-            "Write a Business Description",
-            "Only 65% of businesses in positions 6-10 have completed descriptions &#8212; fewer than "
-            "40% in positions 11-20 do (Localo, 2M profile study). A keyword-relevant "
-            "description directly improves your relevance score with Google."
         ))
 
     if pho == 0:
@@ -369,7 +366,7 @@ def generate_report(business: dict, recipient_email: str = "", locale: str = "US
     breakdown       = business.get("score_breakdown", {})
     report_date     = date.today().strftime("%B %d, %Y")
 
-    score           = recompute_score(breakdown)
+    score           = round(recompute_score(breakdown) * 100 / MAX_SCORE)  # normalized /100
     color           = _score_color(score)
     label           = _score_label(score)
     recommendations = _build_recommendations(breakdown, locale=locale)
@@ -687,7 +684,6 @@ if __name__ == "__main__":
         "review_count": 12,
         "photo_count": 3,
         "has_hours": True,
-        "has_description": False,
         "has_website": True,
         "has_phone": True,
         "primary_type": "dentist",
@@ -698,7 +694,6 @@ if __name__ == "__main__":
             "reviews":      8,
             "rating":       7,
             "hours":       15,
-            "description":  0,
             "photos":       6,
             "website":      8,
             "phone":        3,
@@ -707,12 +702,13 @@ if __name__ == "__main__":
 
     # --- Score tests ---
     html = generate_report(sample, locale="AU")
-    expected_score = 0+8+7+15+0+6+8+3
-    actual_score = recompute_score(sample["score_breakdown"])
-    assert actual_score == expected_score
+    expected_raw = 0+8+7+15+6+8+3
+    actual_raw = recompute_score(sample["score_breakdown"])
+    assert actual_raw == expected_raw
+    displayed_score = round(actual_raw * 100 / MAX_SCORE)
     html_no_ns = html.replace("w3.org/1999/xhtml", "")
     assert "999" not in html_no_ns
-    assert str(actual_score) in html
+    assert str(displayed_score) in html
 
     # --- Clamping tests ---
     overflow_sample = {
@@ -724,14 +720,13 @@ if __name__ == "__main__":
             "reviews":     0,
             "rating":      0,
             "hours":       0,
-            "description": 0,
             "photos":      0,
             "website":    15,
             "phone":      10,
         }
     }
     overflow_score = recompute_score(overflow_sample["score_breakdown"])
-    assert overflow_score == 5 + 0 + 0 + 0 + 0 + 0 + 8 + 3
+    assert overflow_score == 5 + 0 + 0 + 0 + 0 + 8 + 3
     overflow_html = generate_report(overflow_sample, locale="US")
     assert "15/8" not in overflow_html
     assert "10/3" not in overflow_html
@@ -795,7 +790,7 @@ if __name__ == "__main__":
         "google_maps_url": "",
         "score_breakdown": {
             "categories": 5, "reviews": 0, "rating": 0, "hours": 0,
-            "description": 0, "photos": 0, "website": 0, "phone": 0,
+            "photos": 0, "website": 0, "phone": 0,
         }
     }
     no_maps_html = generate_report(no_maps_sample, locale="UK")
@@ -806,7 +801,7 @@ if __name__ == "__main__":
         with open(f"/tmp/sample_report_v3_{loc_code}.html", "w") as f:
             f.write(generate_report(sample, recipient_email="test@example.com", locale=loc_code))
 
-    print(f"Score recomputed correctly: {actual_score}/100")
+    print(f"Score recomputed correctly: raw {actual_raw}/{MAX_SCORE} → displayed {displayed_score}/100")
     print(f"Overflow clamped correctly: {overflow_score}/100")
     print(f"Subject lines verified")
     print(f"Locale detection verified (US/UK/AU/NZ + fallbacks)")
