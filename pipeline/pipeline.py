@@ -40,6 +40,7 @@ from suppression import is_suppressed
 from website_discoverer import discover_website
 from email_extractor import extract_emails
 from email_validator import validate_email
+from email_verifier import verify_email
 from emailer import send_report
 from report_generator import generate_report, generate_subject, detect_locale, recompute_score
 
@@ -166,8 +167,9 @@ def process_business(business: dict, dry_run: bool) -> dict:
         result["skip_reason"] = "no_email_found"
         return result
 
-    # --- Step 3: Find first valid, non-suppressed, non-duplicate email ---
+    # --- Step 3: Find first valid, non-suppressed, non-duplicate, verified email ---
     target_email = None
+    verification_verdict = None
     for email in emails:
         # Validate syntax + MX
         is_valid, reason = validate_email(email)
@@ -185,7 +187,15 @@ def process_business(business: dict, dry_run: bool) -> dict:
             logger.debug(f"  Already sent to: {email}")
             continue
 
+        # Mailbox-level verification (RMP #68) — only called on addresses
+        # that passed all free local checks above (protects API quota)
+        should_send, verdict = verify_email(email)
+        if not should_send:
+            logger.info(f"  Verification skip ({verdict}): {email}")
+            continue
+
         target_email = email
+        verification_verdict = verdict
         break
 
     if not target_email:
@@ -194,6 +204,7 @@ def process_business(business: dict, dry_run: bool) -> dict:
         return result
 
     result["email"] = target_email
+    result["verification_verdict"] = verification_verdict
 
     # --- Step 4: Generate report ---
     # Per-send attribution token (RMP #61, Telemetry Part 4, A1): random URL-safe
@@ -333,6 +344,10 @@ def run_pipeline(
         "skipped_no_email": sum(1 for r in results if r.get("skip_reason") == "no_email_found"),
         "skipped_no_valid_email": sum(1 for r in results if r.get("skip_reason") == "no_valid_email"),
         "send_failed": sum(1 for r in results if r["status"] == "send_failed"),
+        "verified_flagged": sum(
+            1 for r in results
+            if r.get("verification_verdict") and r["verification_verdict"] not in ("valid", "disabled", "no_api_key")
+        ),
         "results": results,
     }
 
@@ -346,6 +361,7 @@ def run_pipeline(
     logger.info(f"  No email:         {summary['skipped_no_email']}")
     logger.info(f"  No valid email:   {summary['skipped_no_valid_email']}")
     logger.info(f"  Send failed:      {summary['send_failed']}")
+    logger.info(f"  Verify flagged:   {summary['verified_flagged']}")
     logger.info("=" * 60)
 
     return summary

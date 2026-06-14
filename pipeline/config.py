@@ -70,3 +70,9 @@ STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")  # sk_live_... or sk_test_
 
 # Directory containing locale-keyed kit PDFs (kit_us.pdf, kit_uk.pdf, kit_au.pdf, kit_nz.pdf)
 KIT_PDF_DIR = Path(os.environ.get("KIT_PDF_DIR", str(PIPELINE_DIR / "kits")))
+
+# ---------------------------------------------------------------------------
+# Email verification (MailValid — RMP #68)
+# ---------------------------------------------------------------------------
+EMAIL_VERIFY_API_KEY = os.environ.get("EMAIL_VERIFY_API_KEY", "")
+EMAIL_VERIFY_ENABLED = os.environ.get("EMAIL_VERIFY_ENABLED", "true").lower() == "true"
