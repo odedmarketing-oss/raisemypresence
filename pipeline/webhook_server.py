@@ -19,6 +19,7 @@ SendGrid Event Webhook setup:
 import html
 import json
 import logging
+import re
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -28,7 +29,7 @@ from urllib.parse import quote
 import stripe
 import uvicorn
 from fastapi import FastAPI, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from config import (
     WEBHOOK_PORT,
@@ -42,6 +43,8 @@ from purchase_log import (
 )
 from pdf_personalizer import personalize_cover
 from emailer import send_attachment_email, send_plain_email
+from pydantic import BaseModel
+from funnel_events import insert_event as insert_funnel_event
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +54,35 @@ logging.basicConfig(
 logger = logging.getLogger("webhooks")
 
 app = FastAPI(title="RMP Webhooks", docs_url=None, redoc_url=None)
+
+
+# ---------------------------------------------------------------------------
+# Funnel tracking helpers (RMP #67)
+# ---------------------------------------------------------------------------
+
+_RMP_TOKEN_RE = re.compile(r'^[0-9a-f]{16}$')
+_TRACK_ORIGIN = "https://raisemypresence.com"
+
+
+def _track_cors_full() -> dict:
+    """Full CORS headers for OPTIONS /track preflight response."""
+    return {
+        "Access-Control-Allow-Origin": _TRACK_ORIGIN,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
+
+
+def _track_cors_post() -> dict:
+    """Minimal CORS header for POST /track response."""
+    return {"Access-Control-Allow-Origin": _TRACK_ORIGIN}
+
+
+class TrackPayload(BaseModel):
+    token: str
+    stage: str
+    ts: str = ""
+    payload: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -873,6 +905,43 @@ async def get_session_for_thankyou(session_id: str):
         },
         headers=_thankyou_cors(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Funnel tracking — /track (RMP #67)
+# ---------------------------------------------------------------------------
+
+@app.options("/track")
+async def track_preflight():
+    return Response(status_code=204, headers=_track_cors_full())
+
+
+@app.post("/track")
+async def track_funnel(body: TrackPayload):
+    # Silently discard tokens that don't match secrets.token_hex(8) format
+    if not _RMP_TOKEN_RE.match(body.token):
+        return Response(status_code=204, headers=_track_cors_post())
+
+    # Validate caller-supplied ts; fall back to UTC now if missing/unparseable
+    ts = body.ts
+    try:
+        if not ts:
+            raise ValueError
+        datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        ts = datetime.now(timezone.utc).isoformat()
+
+    try:
+        insert_funnel_event(
+            rmp_token=body.token,
+            stage=body.stage,
+            ts=ts,
+            payload_json=json.dumps(body.payload),
+        )
+    except Exception as e:
+        logger.warning("funnel_events insert failed (non-fatal): %s", e)
+
+    return Response(status_code=204, headers=_track_cors_post())
 
 
 # ---------------------------------------------------------------------------
