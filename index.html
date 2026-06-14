@@ -1014,16 +1014,11 @@ document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
     function fire(stage) {
         try {
             var body = JSON.stringify({ token: token, stage: stage, ts: new Date().toISOString() });
-            if (stage === 'checkout-start') {
-                // sendBeacon survives navigation away from the page
-                navigator.sendBeacon(TRACK, new Blob([body], { type: 'application/json' }));
-            } else {
-                fetch(TRACK, {
-                    method: 'POST', keepalive: true,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: body
-                }).catch(function () {});
-            }
+            fetch(TRACK, {
+                method: 'POST', keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: body
+            }).catch(function () {});
         } catch (e) {}
     }
 
