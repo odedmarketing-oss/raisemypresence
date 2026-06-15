@@ -11,6 +11,7 @@ Decision matrix:
   status "catch_all" / "unknown" → allow (flagged)
   status "invalid"               → skip
   status "do_not_mail"           → skip
+  status "do_not_mail" + status_reason "role_based" → allow (flagged)
   is_disposable == true          → skip
   API error / timeout / quota    → allow (fail-open)
 
@@ -153,13 +154,17 @@ def verify_email(email: str) -> tuple[bool, str]:
 
     raw_status = result.get("status", "")
     is_disposable = result.get("is_disposable", False)
+    status_reason = result.get("status_reason", "")
 
     if is_disposable:
         verdict = "disposable"
     elif raw_status in ("invalid",):
         verdict = "invalid"
-    elif raw_status in ("do_not_mail",):
-        verdict = "do_not_mail"
+    elif raw_status == "do_not_mail":
+        # RMP #69 (B): role addresses come back do_not_mail with
+        # status_reason "role_based" — allow them; non-role do_not_mail
+        # (traps/complainers) stays blocked.
+        verdict = "role_based" if status_reason == "role_based" else "do_not_mail"
     elif raw_status in ("catch_all",):
         verdict = "catch_all"
     elif raw_status in ("unknown",):

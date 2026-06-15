@@ -28,9 +28,9 @@ def _make_response(status_code=200, json_data=None):
     return resp
 
 
-def _mailvalid_body(status, is_disposable=False):
+def _mailvalid_body(status, is_disposable=False, status_reason=None):
     """Build a MailValid-shaped response body with nested 'result'."""
-    return {
+    body = {
         "success": True,
         "credits_used": 1,
         "result": {
@@ -38,6 +38,9 @@ def _mailvalid_body(status, is_disposable=False):
             "is_disposable": is_disposable,
         },
     }
+    if status_reason is not None:
+        body["result"]["status_reason"] = status_reason
+    return body
 
 
 def _ensure_table():
@@ -149,6 +152,22 @@ class TestVerifyEmail(unittest.TestCase):
         self.assertFalse(should_send)
         self.assertEqual(verdict, "disposable")
         print("  PASS: is_disposable=true → (False, 'disposable') even if status=valid")
+
+    @patch("email_verifier.requests.post")
+    def test_do_not_mail_role_based_allowed(self, mock_post):
+        mock_post.return_value = _make_response(200, _mailvalid_body("do_not_mail", status_reason="role_based"))
+        should_send, verdict = self.mod.verify_email("info@company.com")
+        self.assertTrue(should_send)
+        self.assertEqual(verdict, "role_based")
+        print("  PASS: status=do_not_mail + status_reason=role_based → (True, 'role_based')")
+
+    @patch("email_verifier.requests.post")
+    def test_do_not_mail_complainer_blocked(self, mock_post):
+        mock_post.return_value = _make_response(200, _mailvalid_body("do_not_mail", status_reason="complainer"))
+        should_send, verdict = self.mod.verify_email("complainer@example.com")
+        self.assertFalse(should_send)
+        self.assertEqual(verdict, "do_not_mail")
+        print("  PASS: status=do_not_mail + status_reason=complainer → (False, 'do_not_mail')")
 
     # ------------------------------------------------------------------
     # 2. Fail-open tests
