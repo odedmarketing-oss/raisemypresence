@@ -10,7 +10,6 @@
     <meta property="og:url" content="https://raisemypresence.com/">
     <meta property="og:title" content="Raise My Presence — Google Maps Optimization for Local Businesses">
     <meta property="og:description" content="We audit your Google Business Profile, show you what's missing, and give you everything you need to get found on Google Maps.">
-    <meta property="og:image" content="https://raisemypresence.com/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Raise My Presence — Google Maps Optimization for Local Businesses">
     <meta name="twitter:description" content="We audit your Google Business Profile, show you what's missing, and give you everything you need to get found on Google Maps.">
@@ -20,7 +19,9 @@
     <link rel="apple-touch-icon" sizes="512x512" href="/favicon-512x512.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400&display=swap" rel="stylesheet">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400&display=swap"></noscript>
 
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y70YB8N49G"></script>
@@ -549,6 +550,22 @@
         }
         .faq-item.open .faq-q svg { transform: rotate(45deg); }
 
+        /* ===== FOUNDER ===== */
+        .founder { padding: 80px 0; }
+        .founder-inner { max-width: 680px; margin: 0 auto; text-align: center; }
+        .founder h2 {
+            font-family: 'Fraunces', serif;
+            font-weight: 700;
+            font-size: clamp(1.5rem, 3.5vw, 2.2rem);
+            line-height: 1.2;
+            margin-bottom: 6px;
+        }
+        .founder h2 span { color: var(--green-600); }
+        .founder-title { font-weight: 600; color: var(--gray-700); margin-bottom: 18px; }
+        .founder p { color: var(--gray-700); font-size: 1rem; margin-bottom: 22px; }
+        .founder-link { display: inline-block; color: var(--green-600); font-weight: 600; text-decoration: none; }
+        .founder-link:hover { text-decoration: underline; }
+
         /* ===== CTA ===== */
         .bottom-cta {
             padding: 80px 0;
@@ -658,13 +675,82 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "ProfessionalService",
-      "name": "Raise My Presence",
-      "description": "Google Maps optimization service for local businesses. Free audits, DIY optimization kits, and monthly management.",
-      "url": "https://raisemypresence.com",
-      "serviceType": "Google Business Profile Optimization",
-      "areaServed": ["AU", "NZ", "US", "GB"],
-      "priceRange": "$39-$99"
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://raisemypresence.com/#organization",
+          "name": "Raise My Presence",
+          "url": "https://raisemypresence.com/",
+          "logo": "https://raisemypresence.com/logo.png",
+          "description": "Google Maps optimization service for local businesses. Free audits, DIY optimization kits, and monthly management.",
+          "knowsAbout": [
+            "Google Business Profile optimization",
+            "local SEO",
+            "Google Maps ranking"
+          ],
+          "founder": { "@id": "https://raisemypresence.com/#oded-vilner" },
+          "sameAs": [
+            "https://www.linkedin.com/in/oded-vilner/"
+          ]
+        },
+        {
+          "@type": "Person",
+          "@id": "https://raisemypresence.com/#oded-vilner",
+          "name": "Oded Vilner",
+          "jobTitle": "Founder",
+          "worksFor": { "@id": "https://raisemypresence.com/#organization" },
+          "sameAs": [
+            "https://www.linkedin.com/in/oded-vilner/"
+          ]
+        },
+        {
+          "@type": "ProfessionalService",
+          "@id": "https://raisemypresence.com/#service",
+          "name": "Raise My Presence",
+          "description": "Google Maps optimization service for local businesses. Free audits, DIY optimization kits, and monthly management.",
+          "url": "https://raisemypresence.com/",
+          "provider": { "@id": "https://raisemypresence.com/#organization" },
+          "serviceType": "Google Business Profile Optimization",
+          "areaServed": ["US", "GB", "AU", "NZ"],
+          "priceRange": "$49 - $149"
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://raisemypresence.com/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "How do you audit my business without access to my profile?",
+              "acceptedAnswer": { "@type": "Answer", "text": "We use publicly available data from Google Maps and the Google Places API. Everything we check — your description, hours, photos, reviews, categories — is visible to anyone searching for your business. No access or login needed." }
+            },
+            {
+              "@type": "Question",
+              "name": "Do I need to give you access to my Google Business Profile?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Not for the Free Audit or Optimization Kit — those are entirely hands-off. For Monthly Management, you'll grant us management access to your Google Business Profile so we can post and update on your behalf." }
+            },
+            {
+              "@type": "Question",
+              "name": "Will there be any calls or meetings?",
+              "acceptedAnswer": { "@type": "Answer", "text": "No. Everything is delivered by email. We believe your time is better spent running your business, not sitting on calls. If you have questions, email us and we'll respond within 24 hours." }
+            },
+            {
+              "@type": "Question",
+              "name": "What types of businesses do you work with?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Any local business in Australia or New Zealand that serves customers in a physical area — dental practices, physiotherapy, plumbing, electrical, HVAC, mechanics, cafes, salons, and more. If you have a Google Business Profile (or should have one), we can help." }
+            },
+            {
+              "@type": "Question",
+              "name": "How is this different from an SEO agency?",
+              "acceptedAnswer": { "@type": "Answer", "text": "SEO agencies charge $1,000+ per month and focus on your website. We focus specifically on your Google Maps presence — the listing people see when they search \"near me\". It's targeted, affordable, and you see exactly what you're paying for." }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I cancel Monthly Management anytime?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Yes. No contracts, no lock-in. Cancel anytime via email and we'll stop at the end of your billing period. Your profile stays with you — we never hold anything hostage." }
+            }
+          ]
+        }
+      ]
     }
     </script>
 </head>
@@ -945,6 +1031,19 @@
     </div>
 </section>
 
+<!-- FOUNDER -->
+<section class="founder fade-in">
+    <div class="container">
+        <div class="founder-inner">
+            <div class="section-label">Who's behind this</div>
+            <h2>Built and run by <span>Oded Vilner</span></h2>
+            <p class="founder-title">Founder · 15+ years in performance marketing</p>
+            <p>After 15+ years optimizing campaigns across search, social, and programmatic, I built Raise My Presence to bring that same data-driven approach to the channel most local businesses overlook: their Google Business Profile. No agencies, no jargon, no meetings — just the audit and tools you need to get found on Google Maps.</p>
+            <a href="https://www.linkedin.com/in/oded-vilner/" class="founder-link" target="_blank" rel="noopener">Connect on LinkedIn →</a>
+        </div>
+    </div>
+</section>
+
 <!-- BOTTOM CTA -->
 <section class="bottom-cta fade-in">
     <div class="container">
@@ -995,53 +1094,20 @@ document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
 </script>
 
 <script>
-// RMP #67 Telemetry: funnel-stage instrumentation (land / pricing-view / checkout-start).
-// Strict hex16 token guard; Stripe link rewriting unchanged from prior block.
+// RMP #61 (Telemetry Part 4 — B1, URL-param-only): if the visitor arrived from
+// an outreach email (?rmp=<token>), attach that token to the Stripe Payment
+// Links as client_reference_id. Stripe echoes it back on
+// checkout.session.completed, joining the purchase to the exact send
+// (sent_log.rmp_token). No cookies / no storage.
 (function () {
-    var TRACK = 'https://webhooks.raisemypresence.com/track';
     var params = new URLSearchParams(window.location.search);
     var token = params.get('rmp');
-    if (!token || !/^[0-9a-f]{16}$/.test(token)) return;
-
-    // Stripe link rewriting — unchanged behaviour
+    if (!token || !/^[A-Za-z0-9_-]{1,64}$/.test(token)) return;
     var links = document.querySelectorAll('a[href^="https://buy.stripe.com/"]');
     for (var i = 0; i < links.length; i++) {
         var u = new URL(links[i].href);
         u.searchParams.set('client_reference_id', token);
         links[i].href = u.toString();
-    }
-
-    function fire(stage) {
-        try {
-            var body = JSON.stringify({ token: token, stage: stage, ts: new Date().toISOString() });
-            fetch(TRACK, {
-                method: 'POST', keepalive: true,
-                headers: { 'Content-Type': 'application/json' },
-                body: body
-            }).catch(function () {});
-        } catch (e) {}
-    }
-
-    // Stage 1 — land: immediate
-    fire('land');
-
-    // Stage 2 — pricing-view: real viewport entry via IntersectionObserver
-    var pricingFired = false;
-    var pricingEl = document.getElementById('pricing');
-    if (pricingEl && 'IntersectionObserver' in window) {
-        var pricingObs = new IntersectionObserver(function (entries) {
-            if (!pricingFired && entries[0].isIntersecting) {
-                pricingFired = true;
-                pricingObs.disconnect();
-                fire('pricing-view');
-            }
-        }, { threshold: 0.1 });
-        pricingObs.observe(pricingEl);
-    }
-
-    // Stage 3 — checkout-start: any Stripe link click
-    for (var j = 0; j < links.length; j++) {
-        links[j].addEventListener('click', function () { fire('checkout-start'); });
     }
 })();
 </script>

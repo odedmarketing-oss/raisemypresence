@@ -1,0 +1,27 @@
+# robots.txt — raisemypresence.com
+User-agent: *
+Allow: /
+
+# AI / answer-engine crawlers (explicit allow for citation eligibility)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://raisemypresence.com/sitemap.xml
