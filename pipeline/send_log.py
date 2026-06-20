@@ -28,6 +28,7 @@ def _get_conn() -> sqlite3.Connection:
             status               TEXT    DEFAULT 'sent',
             sendgrid_message_id  TEXT,
             rmp_token            TEXT,
+            domain               TEXT    DEFAULT 'raisemypresence.com',
             UNIQUE(place_id, email)
         )
     """)
@@ -46,6 +47,11 @@ def _get_conn() -> sqlite3.Connection:
     # outreach CTA link, echoed back by Stripe as client_reference_id on purchase.
     if "rmp_token" not in _cols:
         conn.execute("ALTER TABLE sent_log ADD COLUMN rmp_token TEXT")
+    # Per-send sending domain (RMP #77, T-004 Phase 1): which authenticated
+    # domain this message was sent from. DEFAULT backfills historical rows to
+    # the original sole sender; set to 'rmp-us.com' for US cold once routing flips.
+    if "domain" not in _cols:
+        conn.execute("ALTER TABLE sent_log ADD COLUMN domain TEXT DEFAULT 'raisemypresence.com'")
     conn.commit()
     return conn
 
@@ -86,6 +92,7 @@ def log_send(
     status: str = "sent",
     sendgrid_message_id: str = "",
     rmp_token: str = "",
+    domain: str = "raisemypresence.com",
 ) -> bool:
     """
     Record a send. Returns True on success, False if duplicate.
@@ -93,8 +100,8 @@ def log_send(
     conn = _get_conn()
     try:
         conn.execute(
-            """INSERT INTO sent_log (place_id, email, subject, score, sent_at, dry_run, status, sendgrid_message_id, rmp_token)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO sent_log (place_id, email, subject, score, sent_at, dry_run, status, sendgrid_message_id, rmp_token, domain)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 place_id,
                 email.lower(),
@@ -105,6 +112,7 @@ def log_send(
                 status,
                 sendgrid_message_id,
                 rmp_token,
+                domain,
             )
         )
         conn.commit()
