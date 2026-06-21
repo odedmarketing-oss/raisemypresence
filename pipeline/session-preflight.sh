@@ -110,7 +110,7 @@ if [ -d "${REPO_DIR}/.git" ]; then
   else
     echo "preflight: repo_sync verdict=OK"
   fi
-  DRIFT=$(diff -rq "${REPO_DIR}/pipeline/" "${PIPELINE_DIR}/" 2>/dev/null | grep -vE '__pycache__|\.db$|\.env|/kits|\.pyc|\.bak|gmail_|\.json$|deliverability-digest|rmp-pipeline|test_|_diagnostic|oauth_setup')
+  DRIFT=$(diff -rq "${REPO_DIR}/pipeline/" "${PIPELINE_DIR}/" 2>/dev/null | grep -vE '__pycache__|\.db$|\.env|kits|\.pyc|\.bak|gmail_|\.json$|deliverability-digest|rmp-pipeline|test_|_diagnostic|oauth_setup')
   if [ -n "$DRIFT" ]; then
     echo "preflight: runtime_vs_repo verdict=DRIFT"
     echo "$DRIFT" | sed 's/^/preflight:   /'
