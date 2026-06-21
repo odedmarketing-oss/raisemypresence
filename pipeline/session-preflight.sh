@@ -97,5 +97,30 @@ else
   NEEDS_EYES=1
 fi
 
+
+# 5. Deploy-chain integrity — runtime must match the repo (RMP #77, T-022).
+echo "--- 5. deploy-chain integrity (runtime vs repo) ---"
+REPO_DIR="/root/raisemypresence"
+if [ -d "${REPO_DIR}/.git" ]; then
+  git -C "$REPO_DIR" fetch -q origin main 2>/dev/null
+  AB=$(git -C "$REPO_DIR" rev-list --left-right --count origin/main...HEAD 2>/dev/null | tr -d '[:space:]')
+  if [ -n "$AB" ] && [ "$AB" != "00" ]; then
+    echo "preflight: repo_sync verdict=CLONE_OUT_OF_SYNC origin_vs_head=${AB} (run: git -C ${REPO_DIR} pull)"
+    NEEDS_EYES=1
+  else
+    echo "preflight: repo_sync verdict=OK"
+  fi
+  DRIFT=$(diff -rq "${REPO_DIR}/pipeline/" "${PIPELINE_DIR}/" 2>/dev/null | grep -vE '__pycache__|\.db$|\.env|/kits|\.pyc|\.bak|gmail_|\.json$|deliverability-digest|rmp-pipeline|test_|_diagnostic|oauth_setup')
+  if [ -n "$DRIFT" ]; then
+    echo "preflight: runtime_vs_repo verdict=DRIFT"
+    echo "$DRIFT" | sed 's/^/preflight:   /'
+    NEEDS_EYES=1
+  else
+    echo "preflight: runtime_vs_repo verdict=OK"
+  fi
+else
+  echo "preflight: repo_sync verdict=NO_REPO path=${REPO_DIR}"
+  NEEDS_EYES=1
+fi
 echo "=== preflight complete — needs_eyes=${NEEDS_EYES} ==="
 exit $NEEDS_EYES
