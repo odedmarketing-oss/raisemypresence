@@ -12,6 +12,10 @@ Rules:
   - Only returns emails actually present on the page
   - Filters out common noreply/automated addresses
   - Deduplicates and lowercases all results
+
+Telemetry mode (RMP #32):
+  - extract_emails(url, return_telemetry=True) returns (emails, diagnostics)
+  - Production path (return_telemetry=False, default) is unchanged
 """
 
 import re
@@ -33,11 +37,21 @@ _EMAIL_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Obfuscation telemetry (RMP #32) — counts " at " / "[at]" / "(at)" within
+# ~50 chars of " dot " / "[dot]" / "(dot)". Signal only, not used for
+# extraction. False positives acceptable; goal is bucket detection.
+_OBFUSCATION_RE = re.compile(
+    r"[\[\(\s]at[\]\)\s].{1,50}[\[\(\s]dot[\]\)\s]",
+    re.IGNORECASE,
+)
+
 # Addresses to always skip — automated/noreply/example
 _SKIP_PREFIXES = (
     "noreply", "no-reply", "donotreply", "do-not-reply",
     "mailer-daemon", "postmaster", "abuse", "webmaster",
     "root@", "admin@localhost",
+    # RMP #33 Phase 2.1: placeholder local-parts
+    "example", "your-business",
 )
 
 _SKIP_DOMAINS = (
@@ -45,6 +59,8 @@ _SKIP_DOMAINS = (
     "sentry.io", "wixpress.com", "wordpress.com",
     "squarespace.com", "googleapis.com", "google.com",
     "facebook.com", "twitter.com", "instagram.com",
+    # RMP #33 Phase 2.1: placeholder domains
+    "yourdomain.com", "youremail.com", "your-business.com",
 )
 
 # Common image/asset extensions to ignore in email-like strings
@@ -100,10 +116,21 @@ def _extract_regex(text: str) -> set[str]:
     return {m.lower() for m in _EMAIL_RE.findall(text)}
 
 
-def _fetch_page(url: str) -> str | None:
+def _count_obfuscation(text: str) -> int:
+    """Count ' at ... dot ' obfuscation patterns within ~50 chars.
+    Telemetry signal (RMP #32); not used for extraction."""
+    return len(_OBFUSCATION_RE.findall(text))
+
+
+def _fetch_page(url: str, telemetry_record: dict | None = None) -> str | None:
     """
     Fetch a URL and return HTML text, or None on failure.
     Follows redirects, respects timeout, caps response size at 2MB.
+
+    If telemetry_record (dict) is provided, populates in-place with:
+      - http_status: int | None
+      - page_size: int (bytes read before cap)
+      - exception: str | None (exception type name on failure)
     """
     try:
         resp = requests.get(
@@ -113,6 +140,8 @@ def _fetch_page(url: str) -> str | None:
             allow_redirects=True,
             stream=True,
         )
+        if telemetry_record is not None:
+            telemetry_record["http_status"] = resp.status_code
         resp.raise_for_status()
 
         content_type = resp.headers.get("Content-Type", "")
@@ -129,9 +158,23 @@ def _fetch_page(url: str) -> str | None:
             if size > 2_000_000:
                 break
 
+        if telemetry_record is not None:
+            telemetry_record["page_size"] = size
+
         return "".join(chunks)
 
     except requests.RequestException as e:
+        if telemetry_record is not None:
+            # RMP #34 Phase 2.2: preserve pre-raise http_status (line ~142
+            # captures status for any response returned, incl. 4xx/5xx before
+            # raise_for_status()). Fall back to e.response only if pre-raise
+            # didn't run. http_status=None now means true pre-connect failure
+            # (DNS/SSL/timeout/conn refused) — clean dead-site signal.
+            if telemetry_record.get("http_status") is None:
+                resp_obj = getattr(e, "response", None)
+                if resp_obj is not None:
+                    telemetry_record["http_status"] = resp_obj.status_code
+            telemetry_record["exception"] = type(e).__name__
         logger.debug(f"Failed to fetch {url}: {e}")
         return None
 
@@ -144,7 +187,10 @@ def _normalize_url(url: str) -> str:
     return url
 
 
-def extract_emails(website_url: str) -> list[str]:
+def extract_emails(
+    website_url: str,
+    return_telemetry: bool = False,
+) -> list[str] | tuple[list[str], dict]:
     """
     Extract email addresses from a website.
 
@@ -153,31 +199,67 @@ def extract_emails(website_url: str) -> list[str]:
 
     Args:
         website_url: The business website URL.
+        return_telemetry: If True, also return a diagnostics dict with
+            per-page signals (http_status, page_size, text_length,
+            mailto_count, has_form, obfuscation_hits) and rollups
+            (total_mailto_count, total_obfuscation_hits, early_break,
+            found_count). Default False preserves the original list[str]
+            return for all production callers.
 
     Returns:
-        List of validated, deduplicated email addresses found on the site.
-        Empty list if none found or site unreachable.
+        return_telemetry=False (default): list[str] — validated, deduplicated
+            email addresses (unchanged production behavior).
+        return_telemetry=True: tuple[list[str], dict].
     """
     url = _normalize_url(website_url)
     parsed = urlparse(url)
     base = f"{parsed.scheme}://{parsed.netloc}"
 
     all_emails: set[str] = set()
+    pages_telemetry: list[dict] = []
+    total_mailto = 0
+    total_obfuscation = 0
+    early_break = False
 
-    # Pages to check — homepage first, then common contact pages
+    # Pages to check — homepage first, then common contact pages.
+    # RMP #33 Phase 2.1: extended subpath list targets Bucket B
+    # (contact-form-only sites) — staff/team directories often expose
+    # individual emails when /contact is form-only.
     pages = [url]
-    for path in ["/contact", "/contact-us", "/about", "/about-us"]:
+    for path in [
+        "/contact", "/contact-us",
+        "/team", "/staff", "/people", "/our-doctors", "/our-team",
+        "/about", "/about-us",
+    ]:
         pages.append(base + path)
 
     for page_url in pages:
-        html = _fetch_page(page_url)
+        page_record: dict = {
+            "url": page_url,
+            "http_status": None,
+            "page_size": 0,
+            "text_length": 0,
+            "mailto_count": 0,
+            "has_form": False,
+            "obfuscation_hits": 0,
+            "exception": None,
+        }
+
+        html = _fetch_page(
+            page_url,
+            telemetry_record=page_record if return_telemetry else None,
+        )
+
         if not html:
+            if return_telemetry:
+                pages_telemetry.append(page_record)
             continue
 
         soup = BeautifulSoup(html, "html.parser")
 
         # Method 1: mailto links
-        all_emails.update(_extract_mailto(soup))
+        page_mailto = _extract_mailto(soup)
+        all_emails.update(page_mailto)
 
         # Method 2: regex on visible text
         text = soup.get_text(separator=" ", strip=True)
@@ -187,9 +269,19 @@ def extract_emails(website_url: str) -> list[str]:
         for meta in soup.find_all("meta", attrs={"content": True}):
             all_emails.update(_extract_regex(meta["content"]))
 
+        if return_telemetry:
+            page_record["text_length"] = len(text)
+            page_record["mailto_count"] = len(page_mailto)
+            page_record["has_form"] = soup.find("form") is not None
+            page_record["obfuscation_hits"] = _count_obfuscation(text)
+            total_mailto += page_record["mailto_count"]
+            total_obfuscation += page_record["obfuscation_hits"]
+            pages_telemetry.append(page_record)
+
         # If we found emails on this page, no need to check deeper pages
         filtered = {e for e in all_emails if not _should_skip(e)}
         if filtered:
+            early_break = (page_url != pages[-1])
             break
 
     # Final filter and sort
@@ -199,5 +291,15 @@ def extract_emails(website_url: str) -> list[str]:
         logger.info(f"Found {len(result)} email(s) on {url}: {result}")
     else:
         logger.debug(f"No emails found on {url}")
+
+    if return_telemetry:
+        telemetry = {
+            "pages": pages_telemetry,
+            "total_mailto_count": total_mailto,
+            "total_obfuscation_hits": total_obfuscation,
+            "early_break": early_break,
+            "found_count": len(result),
+        }
+        return result, telemetry
 
     return result

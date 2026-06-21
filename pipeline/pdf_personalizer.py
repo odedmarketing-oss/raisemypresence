@@ -42,10 +42,38 @@ from typing import NamedTuple
 
 from pypdf import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.colors import white, black
+from reportlab.lib.colors import black, HexColor
 from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 logger = logging.getLogger(__name__)
+
+# Register Fraunces-Italic TTF if available alongside this module.
+# Falls back to Times-Italic if the TTF is missing (e.g. fresh deploy before
+# the .ttf was scp'd). Logs the choice so deploy issues are visible.
+_FRAUNCES_TTF_PATH = Path(__file__).parent / "Fraunces-Italic.ttf"
+if _FRAUNCES_TTF_PATH.exists():
+    try:
+        pdfmetrics.registerFont(TTFont("Fraunces-Italic", str(_FRAUNCES_TTF_PATH)))
+        _FONT = "Fraunces-Italic"
+        logger.info(f"PDF personalizer using embedded font: Fraunces-Italic")
+    except Exception as e:
+        _FONT = "Times-Italic"
+        logger.warning(f"Failed to register Fraunces-Italic ({e}); falling back to Times-Italic")
+else:
+    _FONT = "Times-Italic"
+    logger.warning(
+        f"Fraunces-Italic.ttf not found at {_FRAUNCES_TTF_PATH}; using Times-Italic fallback"
+    )
+_FONT_COLOR = black
+
+# Mask fill color — matches kit cover page background so the placeholder
+# masks render invisibly against the cream paper. Sampled from kit_us.pdf
+# cover via macOS Digital Color Meter in sRGB (RMP #41, 2026-05-20). All 4
+# locale kits use the same Atelier Workbook palette; resample if a future
+# locale kit shows a different bg.
+_MASK_FILL = HexColor("#FCFCF7")
 
 # US Letter (8.5" x 11" at 72 dpi = 612 x 792 points).
 # All 4 locale kits exported at US Letter dimensions; confirm at first export.
@@ -85,27 +113,33 @@ class TokenLayout(NamedTuple):
 # First-pass estimates below assume a centered cover layout on US Letter.
 # UPDATE after running `python pdf_personalizer.py measure <kit.pdf> grid.pdf`.
 
+# Calibrated 2026-05-20 (RMP #41) via pdfplumber word + char probes on v5 cover:
+#   Placeholders: baseline y=55.50, height 13.99pt (≈14pt typographic)
+#   Labels (above): baseline y=78.75, top y=85.50, font 6.75pt
+#   Placeholder x extents (rightmost = closing `}}`):
+#     {{business_name}}: x=[61.20, 176.61]   width 115.42
+#     {{business_city}}: x=[224.39, 328.42]  width 104.03
+#     {{issue_date}}:    x=[387.60, 474.29]  width  86.69
+# Mask y range extends 8.5pt BELOW baseline (mask_y=47) to cover italic descenders
+# (`y` in business_city, `_` underscore in all three). The kit's font ships without
+# parseable FontBBox, so pdfplumber reports identical line-box y for every glyph
+# — descender depth estimated typographically (italic 14pt → ~3-5pt below baseline;
+# 8.5pt is over-margined safety). Mask top y=72 preserves 6.75pt clearance to
+# label visible bottom at y=78.75.
 _TOKEN_LAYOUT = {
     "business_name": TokenLayout(
-        mask_x=130, mask_y=445, mask_w=352, mask_h=24,
-        text_x=306, text_y=450, font_size=14, text_align="center",
+        mask_x=58, mask_y=47, mask_w=125, mask_h=25,
+        text_x=61, text_y=56, font_size=14, text_align="left",
     ),
     "business_city": TokenLayout(
-        mask_x=130, mask_y=415, mask_w=352, mask_h=20,
-        text_x=306, text_y=420, font_size=11, text_align="center",
+        mask_x=221, mask_y=47, mask_w=115, mask_h=25,
+        text_x=224, text_y=56, font_size=14, text_align="left",
     ),
     "issue_date": TokenLayout(
-        mask_x=130, mask_y=385, mask_w=352, mask_h=20,
-        text_x=306, text_y=390, font_size=11, text_align="center",
+        mask_x=384, mask_y=47, mask_w=95, mask_h=25,
+        text_x=387, text_y=56, font_size=14, text_align="left",
     ),
 }
-
-# Substitution font. Helvetica is a reportlab built-in (no TTF embed needed).
-# For visual parity with the kit (Fraunces / Atelier serif), embed a TTF in
-# v6 polish. Font change is a one-line edit here; no coordinate rework needed.
-_FONT = "Helvetica"
-_FONT_COLOR = black
-
 
 def personalize_cover(
     source_pdf: Path,
@@ -172,9 +206,9 @@ def _build_overlay(business_name: str, business_city: str, issue_date_str: str) 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
 
-    # Phase 1: paint white masks to hide underlying placeholder text.
-    c.setFillColor(white)
-    c.setStrokeColor(white)
+    # Phase 1: paint bg-matching masks to hide underlying placeholder text.
+    c.setFillColor(_MASK_FILL)
+    c.setStrokeColor(_MASK_FILL)
     for layout in _TOKEN_LAYOUT.values():
         c.rect(layout.mask_x, layout.mask_y, layout.mask_w, layout.mask_h, fill=1, stroke=0)
 
