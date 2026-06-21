@@ -42,6 +42,8 @@ def send_report(
     score: int,
     dry_run: bool | None = None,
     subject: str | None = None,
+    from_email: str | None = None,
+    from_name: str | None = None,
 ) -> dict:
     """
     Send an HTML audit report via SendGrid.
@@ -63,6 +65,8 @@ def send_report(
     use_dry_run = dry_run if dry_run is not None else DRY_RUN
     actual_recipient = DRY_RUN_RECIPIENT if use_dry_run else recipient_email
     subject = subject or _build_subject(business_name, score)
+    use_from_email = from_email or FROM_EMAIL
+    use_from_name = from_name or FROM_NAME
 
     if not SENDGRID_API_KEY:
         msg = "SENDGRID_API_KEY not set"
@@ -76,7 +80,7 @@ def send_report(
 
     try:
         message = Mail()
-        message.from_email = From(FROM_EMAIL, FROM_NAME)
+        message.from_email = From(use_from_email, use_from_name)
         message.to = To(actual_recipient)
         message.subject = Subject(subject)
         message.content = HtmlContent(html_body)

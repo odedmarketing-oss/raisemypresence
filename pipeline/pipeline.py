@@ -34,6 +34,7 @@ from pathlib import Path
 from config import (
     SCORE_THRESHOLD, DAILY_SEND_CAP, DRY_RUN,
     SCAN_TO_SEND_DELAY_HOURS, DISCOVERY_RATE_LIMIT,
+    sending_domain_for,
 )
 from send_log import already_sent, today_send_count, log_send
 from suppression import is_suppressed
@@ -212,6 +213,8 @@ def process_business(business: dict, dry_run: bool) -> dict:
     # on purchase and stored in sent_log.rmp_token for the join.
     rmp_token = secrets.token_hex(8)
     locale = detect_locale(business.get("address", ""))
+    sd = sending_domain_for(locale)
+    result["domain"] = sd["domain"]
     html_report = generate_report(business, recipient_email=target_email, locale=locale, rmp_token=rmp_token)
     subject = generate_subject(score, locale=locale)
 
@@ -223,6 +226,8 @@ def process_business(business: dict, dry_run: bool) -> dict:
         score=score,
         dry_run=dry_run,
         subject=subject,
+        from_email=sd["from_email"],
+        from_name=sd["from_name"],
     )
 
     if send_result["success"]:
@@ -236,6 +241,7 @@ def process_business(business: dict, dry_run: bool) -> dict:
             status="sent",
             sendgrid_message_id=send_result.get("sendgrid_message_id"),
             rmp_token=rmp_token,
+            domain=sd["domain"],
         )
         result["status"] = "sent"
     else:

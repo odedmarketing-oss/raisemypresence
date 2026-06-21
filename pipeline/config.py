@@ -76,3 +76,31 @@ KIT_PDF_DIR = Path(os.environ.get("KIT_PDF_DIR", str(PIPELINE_DIR / "kits")))
 # ---------------------------------------------------------------------------
 EMAIL_VERIFY_API_KEY = os.environ.get("EMAIL_VERIFY_API_KEY", "")
 EMAIL_VERIFY_ENABLED = os.environ.get("EMAIL_VERIFY_ENABLED", "true").lower() == "true"
+
+# ---------------------------------------------------------------------------
+# Multi-domain sending (T-004 Phase 1, RMP #78)
+# Per-domain From routing. US cold can route from rmp-us.com to protect
+# raisemypresence.com reputation. Flag default OFF: until flipped, US cold
+# still sends from primary (zero behavior change). Step 5 flip gated on
+# CAN-SPAM identity in SendGrid + CF Email Routing.
+# ---------------------------------------------------------------------------
+RMP_US_COLD_ENABLED = os.environ.get("RMP_US_COLD_ENABLED", "false").lower() == "true"
+
+SENDING_DOMAINS = {
+    "primary": {
+        "domain": "raisemypresence.com",
+        "from_email": FROM_EMAIL,
+        "from_name": FROM_NAME,
+    },
+    "us_cold": {
+        "domain": "rmp-us.com",
+        "from_email": "hello@rmp-us.com",
+        "from_name": FROM_NAME,
+    },
+}
+
+
+def sending_domain_for(locale: str) -> dict:
+    if str(locale).lower() == "us" and RMP_US_COLD_ENABLED:
+        return SENDING_DOMAINS["us_cold"]
+    return SENDING_DOMAINS["primary"]
