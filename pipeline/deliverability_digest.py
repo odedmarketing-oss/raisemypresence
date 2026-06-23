@@ -1063,6 +1063,33 @@ def _format_surface_5_detail(s5: dict) -> str:
         )
 
 
+def get_domain_split() -> dict:
+    """Sends per sending-domain, last 7d, from local sent_log (real sends only).
+    Read-only, no API. Baseline reads 'raisemypresence.com: N' until rmp-us.com
+    routing flips (RMP #78, T-004 Phase 1 Step 4)."""
+    import sqlite3
+    from config import DB_PATH
+    out = {}
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        rows = conn.execute(
+            "SELECT COALESCE(domain,'raisemypresence.com') d, COUNT(*) "
+            "FROM sent_log WHERE dry_run=0 "
+            "AND sent_at >= datetime('now','-7 days') GROUP BY d ORDER BY 2 DESC"
+        ).fetchall()
+        conn.close()
+        out = {d: n for d, n in rows}
+    except Exception as e:
+        logger.error(f"Domain split — sent_log read failed: {e}")
+    return out
+
+
+def _format_domain_split_detail(split: dict) -> str:
+    if not split:
+        return "No real sends in last 7d."
+    return "; ".join(f"{d}: {n}" for d, n in split.items())
+
+
 def format_html(surface_3: dict, surface_4: dict, surface_5: dict, surface_7: dict, today_str: str) -> str:
     s3_status = classify_spam_rate(surface_3)
     s4_status = classify_suppression(surface_4)
@@ -1079,6 +1106,7 @@ def format_html(surface_3: dict, surface_4: dict, surface_5: dict, surface_7: di
         _html_row("Surface 4 &mdash; Suppression WoW", s4_status, s4_detail),
         _html_row("Surface 5 &mdash; Blacklist monitor", s5_status, s5_detail),
         _html_row("Surface 7 &mdash; DMARC auth health", s7_status, s7_detail),
+        _html_row("Send split &mdash; per domain (7d)", "INFO", _format_domain_split_detail(get_domain_split())),
     ])
 
     return f"""<!DOCTYPE html>
