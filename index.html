@@ -695,6 +695,11 @@
             color: var(--gray-700);
             margin-bottom: 28px;
         }
+        .audit-score-note {
+            font-size: 0.82rem;
+            color: var(--gray-500);
+            margin: -4px 0 28px;
+        }
         .audit-issues {
             max-width: 480px;
             margin: 0 auto 24px;
@@ -1215,10 +1220,12 @@ document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
                 '<div class="container">' +
                 '<h1>' + esc(data.business_name) + ', your Google profile scored ' +
                 '<span style="color:' + scoreColor + '">' + data.score + '/100</span></h1>' +
+                '<p class="audit-score-note">Based on a scan of your live Google listing.</p>' +
                 '<p class="audit-subtitle">Here are the 3 areas costing you the most visibility:</p>' +
                 '<div class="audit-issues">' + issuesHtml + '</div>' +
                 '<p class="audit-outcome">' + esc(data.outcome) + '</p>' +
-                '<a href="#pricing" class="hero-cta">Fix My Profile ' +
+                '<p class="audit-outcome" style="font-size:0.88rem;margin-bottom:16px">Fixing these three gaps costs less than a single new client\u2019s first appointment.</p>' +
+                '<a href="#pricing" class="hero-cta">Get My Fix-It Kit ' +
                 '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width:18px;height:18px">' +
                 '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3"/></svg></a>' +
                 '</div>';
