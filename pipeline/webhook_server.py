@@ -45,6 +45,8 @@ from pdf_personalizer import personalize_cover
 from emailer import send_attachment_email, send_plain_email
 from pydantic import BaseModel
 from funnel_events import insert_event as insert_funnel_event
+from audit_landing import get_audit_landing_data
+from report_generator import SCORE_FACTORS, MAX_SCORE
 
 logging.basicConfig(
     level=logging.INFO,
@@ -942,6 +944,109 @@ async def track_funnel(body: TrackPayload):
         logger.warning("funnel_events insert failed (non-fatal): %s", e)
 
     return Response(status_code=204, headers=_track_cors_post())
+
+
+# ---------------------------------------------------------------------------
+# Audit landing page — /api/audit/{rmp_token} (T-019)
+# ---------------------------------------------------------------------------
+
+_AUDIT_CORS_ORIGIN = "https://raisemypresence.com"
+
+
+def _audit_cors() -> dict:
+    return {"Access-Control-Allow-Origin": _AUDIT_CORS_ORIGIN}
+
+
+def _audit_cors_full() -> dict:
+    return {
+        "Access-Control-Allow-Origin": _AUDIT_CORS_ORIGIN,
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
+
+
+def _outcome_reframe(score: int, top_issues: list) -> str:
+    """Generate a score-tiered outcome sentence referencing top issue areas."""
+    areas = " and ".join(i["label"].lower() for i in top_issues[:2])
+    if score < 40:
+        return (
+            f"Your listing is missing critical elements in {areas} "
+            f"that drive the majority of local search rankings. "
+            f"Fixing these could put you in front of customers already searching for your services."
+        )
+    if score < 60:
+        return (
+            f"Your profile has gaps in {areas} that are "
+            f"limiting your visibility to local customers. "
+            f"A few targeted improvements could significantly increase your reach."
+        )
+    return (
+        f"Your profile is on the right track but has room to grow in {areas}. "
+        f"Closing these gaps could help you stand out from nearby competitors."
+    )
+
+
+@app.options("/api/audit/{rmp_token}")
+async def audit_preflight(rmp_token: str):
+    return Response(status_code=204, headers=_audit_cors_full())
+
+
+@app.get("/api/audit/{rmp_token}")
+async def get_audit_for_landing(rmp_token: str):
+    """Return personalized audit data for the landing-page hero."""
+    if not _RMP_TOKEN_RE.match(rmp_token):
+        return JSONResponse(
+            {"error": "invalid_token"},
+            status_code=400,
+            headers=_audit_cors(),
+        )
+
+    data = get_audit_landing_data(rmp_token)
+    if not data:
+        return JSONResponse(
+            {"error": "not_found"},
+            status_code=404,
+            headers=_audit_cors(),
+        )
+
+    # Compute top 3 issues from score_breakdown
+    breakdown = json.loads(data["score_breakdown_json"])
+    issues = []
+    for key, label, maximum in SCORE_FACTORS:
+        earned = min(breakdown.get(key, 0), maximum)
+        gap = maximum - earned
+        if gap > 0:
+            if earned == 0:
+                status = "Missing"
+            elif (earned / maximum) < 0.5:
+                status = "Low"
+            else:
+                status = "Incomplete"
+            issues.append({
+                "key": key, "label": label,
+                "earned": earned, "max": maximum,
+                "status": status, "gap": gap,
+            })
+    issues.sort(key=lambda x: x["gap"], reverse=True)
+    top_issues = [
+        {"key": i["key"], "label": i["label"], "earned": i["earned"],
+         "max": i["max"], "status": i["status"]}
+        for i in issues[:3]
+    ]
+
+    display_score = round(data["score"] * 100 / MAX_SCORE)
+    outcome = _outcome_reframe(display_score, top_issues)
+
+    return JSONResponse(
+        {
+            "business_name": data["business_name"],
+            "score": display_score,
+            "top_issues": top_issues,
+            "outcome": outcome,
+            "locale": data["locale"],
+        },
+        headers=_audit_cors(),
+    )
 
 
 # ---------------------------------------------------------------------------

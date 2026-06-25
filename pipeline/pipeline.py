@@ -44,6 +44,7 @@ from email_validator import validate_email
 from email_verifier import verify_email
 from emailer import send_report
 from report_generator import generate_report, generate_subject, detect_locale, recompute_score
+from audit_landing import save_audit_landing_data
 
 logger = logging.getLogger("pipeline")
 
@@ -243,6 +244,16 @@ def process_business(business: dict, dry_run: bool) -> dict:
             rmp_token=rmp_token,
             domain=sd["domain"],
         )
+        try:
+            save_audit_landing_data(
+                rmp_token=rmp_token,
+                business_name=name,
+                score=score,
+                score_breakdown=breakdown,
+                locale=locale,
+            )
+        except Exception:
+            logger.warning("audit_landing_data save failed for %s", rmp_token, exc_info=True)
         result["status"] = "sent"
     else:
         result["status"] = "send_failed"

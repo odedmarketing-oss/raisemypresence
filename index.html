@@ -671,6 +671,67 @@
             opacity: 1;
             transform: translateY(0);
         }
+
+        /* ===== AUDIT HERO — personalized landing (T-019) ===== */
+        .audit-hero {
+            padding: 60px 0 48px;
+            text-align: center;
+            border-bottom: 2px solid var(--green-100);
+            background: var(--green-50);
+        }
+        .audit-hero h1 {
+            font-family: 'Fraunces', serif;
+            font-weight: 800;
+            font-size: clamp(1.5rem, 4vw, 2.4rem);
+            line-height: 1.2;
+            color: var(--gray-900);
+            margin-bottom: 8px;
+            max-width: 640px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .audit-subtitle {
+            font-size: 1rem;
+            color: var(--gray-700);
+            margin-bottom: 28px;
+        }
+        .audit-issues {
+            max-width: 480px;
+            margin: 0 auto 24px;
+            text-align: left;
+        }
+        .audit-issue {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--gray-100);
+            font-size: 0.95rem;
+        }
+        .audit-issue:last-child { border-bottom: none; }
+        .audit-issue .label { color: var(--gray-900); font-weight: 500; }
+        .audit-issue .status {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 100px;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+        .status-missing { background: #FEE2E2; color: #DC2626; }
+        .status-low { background: #FEE2E2; color: #DC2626; }
+        .status-incomplete { background: #FEF3C7; color: #B45309; }
+        .audit-outcome {
+            font-size: 0.95rem;
+            color: var(--gray-700);
+            max-width: 520px;
+            margin: 0 auto 28px;
+            line-height: 1.55;
+        }
+        @media (max-width: 600px) {
+            .audit-hero { padding: 40px 0 32px; }
+            .audit-issues { max-width: 100%; }
+        }
     </style>
     <script type="application/ld+json">
     {
@@ -1108,6 +1169,69 @@ document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
         var u = new URL(links[i].href);
         u.searchParams.set('client_reference_id', token);
         links[i].href = u.toString();
+    }
+})();
+</script>
+
+<script>
+// T-019: Personalized audit hero for cold-email visitors.
+// If ?rmp=<token> is present, fetch stored audit data and render a
+// personalized hero above the generic one. Graceful degradation on failure.
+(function () {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('rmp');
+    if (!token || !/^[0-9a-f]{16}$/.test(token)) return;
+
+    var API_BASE = 'https://webhooks.raisemypresence.com';
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function () { controller.abort(); }, 5000);
+
+    fetch(API_BASE + '/api/audit/' + encodeURIComponent(token), { signal: controller.signal })
+        .then(function (res) {
+            clearTimeout(timeoutId);
+            if (!res.ok) return null;
+            return res.json();
+        })
+        .then(function (data) {
+            if (!data || !data.business_name || !data.top_issues || !data.top_issues.length) return;
+
+            var scoreColor = data.score < 50 ? '#DC2626' : (data.score < 70 ? '#B45309' : '#16A34A');
+
+            var issuesHtml = '';
+            var statusClasses = { Missing: 'status-missing', Low: 'status-low', Incomplete: 'status-incomplete' };
+            for (var i = 0; i < data.top_issues.length; i++) {
+                var issue = data.top_issues[i];
+                var cls = statusClasses[issue.status] || 'status-incomplete';
+                issuesHtml +=
+                    '<div class="audit-issue">' +
+                    '<span class="label">' + esc(issue.label) + '</span>' +
+                    '<span class="status ' + cls + '">' + esc(issue.status) + '</span>' +
+                    '</div>';
+            }
+
+            var section = document.createElement('section');
+            section.className = 'audit-hero';
+            section.innerHTML =
+                '<div class="container">' +
+                '<h1>' + esc(data.business_name) + ', your Google profile scored ' +
+                '<span style="color:' + scoreColor + '">' + data.score + '/100</span></h1>' +
+                '<p class="audit-subtitle">Here are the 3 areas costing you the most visibility:</p>' +
+                '<div class="audit-issues">' + issuesHtml + '</div>' +
+                '<p class="audit-outcome">' + esc(data.outcome) + '</p>' +
+                '<a href="#pricing" class="hero-cta">Fix My Profile ' +
+                '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width:18px;height:18px">' +
+                '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3"/></svg></a>' +
+                '</div>';
+
+            var hero = document.querySelector('.hero');
+            if (hero) hero.parentNode.insertBefore(section, hero);
+        })
+        .catch(function () { clearTimeout(timeoutId); });
+
+    function esc(t) {
+        var d = document.createElement('div');
+        d.appendChild(document.createTextNode(t));
+        return d.innerHTML;
     }
 })();
 </script>
