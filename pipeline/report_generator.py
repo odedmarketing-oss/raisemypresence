@@ -458,7 +458,7 @@ def generate_report(business: dict, recipient_email: str = "", locale: str = "US
     # client_reference_id on purchase. NO checkout/redirect link in the email
     # itself (cold-email deliverability / domain-reputation priority).
     if rmp_token:
-        cta_url = f"https://raisemypresence.com/?rmp={rmp_token}#pricing"
+        cta_url = f"https://raisemypresence.com/audit?rmp={rmp_token}"
     else:
         cta_url = "https://raisemypresence.com/#pricing"
 
