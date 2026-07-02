@@ -924,6 +924,10 @@ async def track_funnel(body: TrackPayload):
     if not _RMP_TOKEN_RE.match(body.token):
         return Response(status_code=204, headers=_track_cors_post())
 
+    # B3 fix (RMP #82): reject tokens not minted by the pipeline
+    if not get_audit_landing_data(body.token):
+        return Response(status_code=204, headers=_track_cors_post())
+
     # Validate caller-supplied ts; fall back to UTC now if missing/unparseable
     ts = body.ts
     try:
