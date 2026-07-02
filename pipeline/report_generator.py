@@ -167,6 +167,11 @@ def recompute_score(breakdown: dict) -> int:
     return min(MAX_SCORE, total)
 
 
+def normalize_score(raw: int) -> int:
+    """Normalize a raw score (0--MAX_SCORE) to a 0--100 percentage."""
+    return round(raw * 100 / MAX_SCORE)
+
+
 # ---------------------------------------------------------------------------
 # Display helpers
 # ---------------------------------------------------------------------------

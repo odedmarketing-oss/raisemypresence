@@ -43,7 +43,7 @@ from email_extractor import extract_emails
 from email_validator import validate_email
 from email_verifier import verify_email
 from emailer import send_report
-from report_generator import generate_report, generate_subject, detect_locale, recompute_score
+from report_generator import generate_report, generate_subject, detect_locale, recompute_score, normalize_score
 from audit_landing import save_audit_landing_data
 
 logger = logging.getLogger("pipeline")
@@ -114,7 +114,7 @@ def filter_businesses(businesses: list[dict], threshold: int) -> list[dict]:
             no_website += 1
             continue
         breakdown = biz.get("score_breakdown", {})
-        score = recompute_score(breakdown)
+        score = normalize_score(recompute_score(breakdown))
         if score >= threshold:
             above_threshold += 1
             continue
@@ -139,7 +139,7 @@ def process_business(business: dict, dry_run: bool) -> dict:
     name = business.get("name", "unknown")
     place_id = business.get("place_id", "")
     breakdown = business.get("score_breakdown", {})
-    score = recompute_score(breakdown)
+    score = normalize_score(recompute_score(breakdown))
 
     result = {
         "name": name,

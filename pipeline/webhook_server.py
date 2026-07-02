@@ -1034,7 +1034,7 @@ async def get_audit_for_landing(rmp_token: str):
         for i in issues[:3]
     ]
 
-    display_score = round(data["score"] * 100 / MAX_SCORE)
+    display_score = data["score"]
     outcome = _outcome_reframe(display_score, top_issues)
 
     return JSONResponse(
