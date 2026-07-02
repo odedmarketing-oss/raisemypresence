@@ -224,12 +224,14 @@ def generate_subject(score: int, locale: str = "US") -> str:
     Generate a short, lowercase, internal-looking subject line.
     Based on cold-email skill: 2-4 words, no pitching, no punctuation tricks.
     Locale parameter reserved for future A/B testing per market.
+
+    Thresholds are on the /100 normalised scale (B2 fix, RMP #82).
     """
-    if score < 30:
+    if score < 34:
         return "your google profile"
-    elif score < 50:
+    elif score < 57:
         return "google profile gaps"
-    elif score < 70:
+    elif score < 80:
         return "profile quick wins"
     return "profile checkup"
 
