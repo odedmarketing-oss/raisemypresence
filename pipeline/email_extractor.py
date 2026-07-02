@@ -61,6 +61,15 @@ _SKIP_DOMAINS = (
     "facebook.com", "twitter.com", "instagram.com",
     # RMP #33 Phase 2.1: placeholder domains
     "yourdomain.com", "youremail.com", "your-business.com",
+    # RMP #82 B1: booking/scheduling platform domains — these are platform
+    # inboxes (e.g. safeguarding@vagaro.com), not the business owner.
+    "vagaro.com", "booksy.com", "fresha.com", "genbook.com",
+    "schedulicity.com", "styleseat.com", "boulevard.io",
+    "mindbodyonline.com", "acuityscheduling.com", "setmore.com",
+    "glossgenius.com", "mangomint.com", "zenoti.com",
+    "phorest.com", "salonrunner.com", "rosy.com",
+    "salonbiz.com", "saloninteractive.com", "shortcuts.com.au",
+    "squareup.com", "square.site",
 )
 
 # Common image/asset extensions to ignore in email-like strings
