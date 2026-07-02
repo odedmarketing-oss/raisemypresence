@@ -5,10 +5,18 @@
 #   Local-Presence-Optimization/src/pipeline/rmp-pipeline
 # Never edit /etc/cron.d/rmp-pipeline directly on Tencent.
 #
-# Schedule (UTC — each line hits ~9 AM local in the target market):
-#   UK  08:00 UTC → 09:00 BST           [PAUSED 2026-05-08 — RMP #26]
-#   US  13:00 UTC → 09:00 Eastern / 08:00 Central
-#   AU  22:00 UTC → 08:00 Sydney (next local morning, same UTC day)  [PAUSED 2026-05-08 — RMP #26]
+# Schedule (system local time = CST/UTC+8 — cron uses system local, NOT UTC):
+#   UK  08:00 CST → 00:00 UTC → 01:00 BST             [PAUSED 2026-05-08 — RMP #26]
+#   US  13:00 CST → 05:00 UTC → 01:00 EDT / 00:00 CDT
+#   AU  22:00 CST → 14:00 UTC → 00:00 AEST (next day)  [PAUSED 2026-05-08 — RMP #26]
+#
+# NOTE on send-time strategy (discovered RMP #45, 2026-05-23):
+# Pre-#45 comments claimed sends fire at 9 AM US local. Cron actually fires
+# at 13:00 CST → 05:00 UTC → midnight / 01:00 US local. The #37 baseline at
+# midnight delivery is 45.83% open — excellent. Whether to shift to 9 AM US
+# local (change `0 13 * * *` → `0 21 * * *`) is logged as a deferred
+# follow-up in open-gates.md ("Send-time strategy evaluation",
+# trigger 2026-06-06 = ~2 weeks of additional engagement data).
 #
 # US-only focus locked RMP #26 (2026-05-08). UK + AU paused pending US
 # extraction validation (cascade fix + first-sale conversion). Re-enable
@@ -21,7 +29,7 @@
 #   AU batch adds 5   → cap at 20     [paused — see above]
 #
 # Volume-floor monitoring (added RMP #26, 2026-05-08):
-#   Daily check at 14:00 UTC (1hr after US run completes). Fires SendGrid
+#   Daily check at 14:00 CST = 06:00 UTC (1hr after US run completes). Fires SendGrid
 #   alert if rolling 7-day US send volume drops below 50% of expected
 #   (cap × days = 15 × 7 = 105 expected; floor = 52). Catches inventory
 #   exhaustion, cascade failure, or silent cron failures earlier than
