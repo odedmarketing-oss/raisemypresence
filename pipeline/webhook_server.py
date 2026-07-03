@@ -756,7 +756,7 @@ def _build_kit_email_html(purchase: dict) -> str:
         '<!DOCTYPE html>'
         '<html><head><meta charset="UTF-8"></head>'
         '<body style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', sans-serif; color: #111827; max-width: 560px; margin: 0 auto; padding: 24px;">'
-        f'<p style="font-size: 16px; line-height: 1.6;">Hi {purchase["business_name"]},</p>'
+        f'<p style="font-size: 16px; line-height: 1.6;">Hi {html.escape(purchase["business_name"])},</p>'
         '<p style="font-size: 16px; line-height: 1.6;">Your Raise My Presence Kit is attached \u2014 personalized for your business. It walks you through nine milestones to maximize your Google Maps visibility, with time budgets, scorecards, and a 45-minute Fast Track if you\'re short on time.</p>'
         '<p style="font-size: 16px; line-height: 1.6;">Start with the Fast Track on page 3. Hit every milestone, and you\'ll have the strongest local Google presence in your category.</p>'
         '<p style="font-size: 16px; line-height: 1.6;">If you\'d rather we run this for you each month, page 24 has the details.</p>'
@@ -772,7 +772,7 @@ def _build_monthly_welcome_html(purchase: dict) -> str:
         '<!DOCTYPE html>'
         '<html><head><meta charset="UTF-8"></head>'
         '<body style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', sans-serif; color: #111827; max-width: 560px; margin: 0 auto; padding: 24px;">'
-        f'<p style="font-size: 16px; line-height: 1.6;">Hi {purchase["business_name"]},</p>'
+        f'<p style="font-size: 16px; line-height: 1.6;">Hi {html.escape(purchase["business_name"])},</p>'
         '<p style="font-size: 16px; line-height: 1.6;">Welcome to Raise My Presence Management. Your subscription is active.</p>'
         '<p style="font-size: 16px; line-height: 1.6;">Here\'s what happens next: we\'ll audit your Google Business Profile within 2 business days, then begin the monthly optimization cycle \u2014 reviews, posts, photos, citation maintenance, performance monitoring. No calls, no meetings, no reports. You\'ll see the results in your profile.</p>'
         '<p style="font-size: 16px; line-height: 1.6;">Manage your subscription anytime at <a href="https://billing.stripe.com/p/login/dRmeV51MU4gE6ur7SWdAk00" style="color: #16A34A;">billing.stripe.com</a>.</p>'
@@ -796,8 +796,8 @@ def _notify_operator(purchase: dict, send_result: dict) -> None:
             f"Product:        {purchase['product']}\n"
             f"Locale:         {purchase['locale']}\n"
             f"Amount:         {amount_display}\n"
-            f"Business name:  {purchase['business_name']}\n"
-            f"Business city:  {purchase['business_city']}\n"
+            f"Business name:  {html.escape(purchase['business_name'])}\n"
+            f"Business city:  {html.escape(purchase['business_city'])}\n"
             f"Customer email: {purchase['email']}\n"
             f"Session ID:     {purchase['session_id']}\n"
             f"Delivered to:   {send_result.get('recipient')}\n"
