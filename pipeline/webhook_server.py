@@ -409,16 +409,19 @@ async def unsubscribe_post(email: str = Query(default=""), t: str = Query(defaul
     if not email or "@" not in email:
         return HTMLResponse(_ERROR_HTML, status_code=400)
 
-    if t and not verify_unsub_token(email, t):
+    if not t:
+        logger.warning(f"Unsubscribe POST: missing token for {email}")
+        return HTMLResponse(_ERROR_HTML, status_code=400)
+
+    if not verify_unsub_token(email, t):
         logger.warning(f"Unsubscribe POST: invalid token for {email}")
         return HTMLResponse(_ERROR_HTML, status_code=400)
 
     if is_suppressed(email):
         return HTMLResponse(_ALREADY_UNSUB_HTML)
 
-    reason = "unsubscribe" if t else "unsubscribe_legacy"
-    add_suppression(email, reason=reason)
-    logger.info(f"Unsubscribed: {email} ({reason})")
+    add_suppression(email, reason="unsubscribe")
+    logger.info(f"Unsubscribed: {email}")
     return HTMLResponse(_UNSUB_HTML.replace("{email}", html.escape(email)))
 
 
