@@ -28,12 +28,14 @@ from urllib.parse import quote
 
 import stripe
 import uvicorn
+from sendgrid.helpers.eventwebhook import EventWebhook, EventWebhookHeader
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from config import (
     WEBHOOK_PORT,
     STRIPE_WEBHOOK_SECRET, STRIPE_API_KEY, KIT_PDF_DIR,
+    SENDGRID_WEBHOOK_VERIFY_KEY,
 )
 from unsubscribe import verify_unsub_token
 from suppression import add_suppression, is_suppressed
@@ -122,8 +124,34 @@ async def sendgrid_webhook(request: Request):
     Handle SendGrid Event Webhook.
     Adds hard-bounced emails to suppression list.
     """
+    raw_body = (await request.body()).decode("utf-8")
+
+    # --- Signature verification (F-01) ---
+    if SENDGRID_WEBHOOK_VERIFY_KEY:
+        signature = request.headers.get(EventWebhookHeader.SIGNATURE, "")
+        timestamp = request.headers.get(EventWebhookHeader.TIMESTAMP, "")
+        try:
+            ew = EventWebhook()
+            ec_key = ew.convert_public_key_to_ecdsa(SENDGRID_WEBHOOK_VERIFY_KEY)
+            if not ew.verify_signature(raw_body, signature, timestamp, ec_key):
+                logger.warning("SendGrid webhook: signature verification failed")
+                return JSONResponse(
+                    {"status": "error", "message": "invalid signature"},
+                    status_code=403,
+                )
+        except Exception as e:
+            logger.warning(f"SendGrid webhook: signature verification error: {e}")
+            return JSONResponse(
+                {"status": "error", "message": "invalid signature"},
+                status_code=403,
+            )
+    else:
+        logger.warning(
+            "SENDGRID_WEBHOOK_VERIFY_KEY not set — skipping signature verification"
+        )
+
     try:
-        events = await request.json()
+        events = json.loads(raw_body)
     except Exception as e:
         logger.error(f"Failed to parse webhook payload: {e}")
         return {"status": "error", "message": "invalid json"}
