@@ -90,6 +90,40 @@ class TrackPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Per-IP rate limiter for POST /track (F-04, RMP #85)
+# ---------------------------------------------------------------------------
+
+class _IPRateLimiter:
+    """Fixed-window per-IP rate limiter. Stdlib only, no async awaits."""
+
+    def __init__(self, max_requests: int = 30, window_seconds: int = 60, max_ips: int = 10_000):
+        self._max_requests = max_requests
+        self._window = window_seconds
+        self._max_ips = max_ips
+        self._hits: dict[str, list] = {}  # ip -> [window_start, count]
+
+    def is_allowed(self, ip: str) -> bool:
+        now = time.monotonic()
+        entry = self._hits.get(ip)
+        if entry is None or now - entry[0] >= self._window:
+            # New window — evict expired entries if at capacity
+            if entry is None and len(self._hits) >= self._max_ips:
+                expired = [k for k, v in self._hits.items() if now - v[0] >= self._window]
+                for k in expired:
+                    del self._hits[k]
+                # Fail-open if still over capacity after purge
+                if len(self._hits) >= self._max_ips:
+                    return True
+            self._hits[ip] = [now, 1]
+            return True
+        entry[1] += 1
+        return entry[1] <= self._max_requests
+
+
+_track_limiter = _IPRateLimiter()
+
+
+# ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
 
@@ -950,7 +984,15 @@ async def track_preflight():
 
 
 @app.post("/track")
-async def track_funnel(body: TrackPayload):
+async def track_funnel(body: TrackPayload, request: Request):
+    # Per-IP rate limit (F-04) — before any DB work
+    client_ip = (
+        (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        or request.client.host
+    )
+    if not _track_limiter.is_allowed(client_ip):
+        return Response(status_code=204, headers=_track_cors_post())
+
     # Silently discard tokens that don't match secrets.token_hex(8) format
     if not _RMP_TOKEN_RE.match(body.token):
         return Response(status_code=204, headers=_track_cors_post())
