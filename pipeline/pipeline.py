@@ -36,7 +36,7 @@ from config import (
     SCAN_TO_SEND_DELAY_HOURS, DISCOVERY_RATE_LIMIT,
     sending_domain_for,
 )
-from send_log import already_sent, today_send_count, log_send
+from send_log import already_sent, today_send_count, log_send, update_send_status, delete_send, get_pending_sends
 from suppression import is_suppressed
 from website_discoverer import discover_website
 from email_extractor import extract_emails
@@ -219,7 +219,40 @@ def process_business(business: dict, dry_run: bool) -> dict:
     html_report = generate_report(business, recipient_email=target_email, locale=locale, rmp_token=rmp_token)
     subject = generate_subject(score, locale=locale)
 
-    # --- Step 5: Send ---
+    # --- Step 5a: Save audit landing data BEFORE send (F-03) ---
+    # Ensures token is in DB for B3 provenance when recipient clicks.
+    # INSERT OR IGNORE is idempotent — safe to run before send.
+    try:
+        save_audit_landing_data(
+            rmp_token=rmp_token,
+            business_name=name,
+            score=score,
+            score_breakdown=breakdown,
+            locale=locale,
+        )
+    except Exception:
+        logger.warning("audit_landing_data save failed for %s", rmp_token, exc_info=True)
+
+    # --- Step 5b: Write-ahead log with status="pending" (F-03) ---
+    # UNIQUE(place_id, email) atomically claims the dedup slot.
+    # Crash after this point → pending row survives → no re-send.
+    if not log_send(
+        place_id=place_id,
+        email=target_email,
+        subject=f"Score {score}/100",
+        score=score,
+        dry_run=dry_run,
+        status="pending",
+        sendgrid_message_id="",
+        rmp_token=rmp_token,
+        domain=sd["domain"],
+    ):
+        logger.info("  Dedup on insert (pending row exists): %s", target_email)
+        result["status"] = "skipped"
+        result["skip_reason"] = "dedup_on_insert"
+        return result
+
+    # --- Step 5c: Send ---
     send_result = send_report(
         recipient_email=target_email,
         html_body=html_report,
@@ -232,32 +265,30 @@ def process_business(business: dict, dry_run: bool) -> dict:
     )
 
     if send_result["success"]:
-        # --- Step 6: Log ---
-        log_send(
-            place_id=place_id,
-            email=target_email,
-            subject=f"Score {score}/100",
-            score=score,
-            dry_run=dry_run,
-            status="sent",
-            sendgrid_message_id=send_result.get("sendgrid_message_id"),
-            rmp_token=rmp_token,
-            domain=sd["domain"],
+        # --- Step 5d: Mark as sent ---
+        update_send_status(
+            place_id, target_email, "sent",
+            send_result.get("sendgrid_message_id", ""),
         )
-        try:
-            save_audit_landing_data(
-                rmp_token=rmp_token,
-                business_name=name,
-                score=score,
-                score_breakdown=breakdown,
-                locale=locale,
-            )
-        except Exception:
-            logger.warning("audit_landing_data save failed for %s", rmp_token, exc_info=True)
         result["status"] = "sent"
     else:
-        result["status"] = "send_failed"
-        result["skip_reason"] = send_result.get("error", "unknown")
+        # --- Step 5e: Failure handling (F-03 safety) ---
+        # Only delete pending row when SendGrid definitively rejected (status_code
+        # is an int → we got an HTTP response, email was NOT accepted).
+        # If status_code is None → exception path (timeout, network error after
+        # bytes left the door). Ambiguous — keep pending row to prevent duplicate.
+        if send_result.get("status_code") is not None:
+            delete_send(place_id, target_email)
+            result["status"] = "send_failed"
+            result["skip_reason"] = send_result.get("error", "unknown")
+        else:
+            logger.warning(
+                "AMBIGUOUS_SEND: place_id=%s email=%s — keeping pending row "
+                "(status_code=None, error=%s)",
+                place_id, target_email, send_result.get("error", "unknown"),
+            )
+            result["status"] = "send_failed"
+            result["skip_reason"] = "ambiguous_failure"
 
     return result
 
@@ -302,6 +333,15 @@ def run_pipeline(
         if not check_scan_delay(scan_path, SCAN_TO_SEND_DELAY_HOURS):
             logger.error("Pipeline aborted — scan-to-send delay not met.")
             return {"aborted": True, "reason": "scan_delay"}
+
+    # --- Warn about crash-orphaned pending sends (F-03) ---
+    pending = get_pending_sends()
+    for p in pending:
+        logger.warning(
+            "PENDING_SEND: place_id=%s email=%s rmp_token=%s — "
+            "possibly sent on %s, suppressed from re-send",
+            p["place_id"], p["email"], p["rmp_token"], p["sent_at"],
+        )
 
     # --- Load and filter ---
     businesses = load_scan(scan_path)

@@ -123,6 +123,47 @@ def log_send(
         conn.close()
 
 
+def update_send_status(place_id: str, email: str, status: str, sendgrid_message_id: str = "") -> bool:
+    """Update status and message ID for an existing sent_log row. Returns True on success."""
+    conn = _get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE sent_log SET status = ?, sendgrid_message_id = ? WHERE place_id = ? AND email = ?",
+            (status, sendgrid_message_id, place_id, email.lower()),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def delete_send(place_id: str, email: str) -> bool:
+    """Remove a pending row after send failure so next run can retry. Returns True on success."""
+    conn = _get_conn()
+    try:
+        cur = conn.execute(
+            "DELETE FROM sent_log WHERE place_id = ? AND email = ?",
+            (place_id, email.lower()),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_pending_sends() -> list[dict]:
+    """Return all rows with status='pending' — crash orphans from interrupted runs."""
+    conn = _get_conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT place_id, email, rmp_token, sent_at FROM sent_log WHERE status = 'pending'"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def get_send_history(limit: int = 50) -> list[dict]:
     """Return recent send history for debugging."""
     conn = _get_conn()
