@@ -46,6 +46,7 @@ SCORE_THRESHOLD = int(os.environ.get("SCORE_THRESHOLD", "50"))
 
 # Minimum hours between scan file mtime and send execution
 SCAN_TO_SEND_DELAY_HOURS = int(os.environ.get("SCAN_TO_SEND_DELAY_HOURS", "24"))
+MAX_SCAN_FILE_AGE_DAYS = int(os.environ.get("MAX_SCAN_FILE_AGE_DAYS", "7"))
 
 # ---------------------------------------------------------------------------
 # Website discovery

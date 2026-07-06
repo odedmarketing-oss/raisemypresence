@@ -34,6 +34,7 @@ from pathlib import Path
 from config import (
     SCORE_THRESHOLD, DAILY_SEND_CAP, DRY_RUN,
     SCAN_TO_SEND_DELAY_HOURS, DISCOVERY_RATE_LIMIT,
+    MAX_SCAN_FILE_AGE_DAYS,
     sending_domain_for,
 )
 from send_log import already_sent, today_send_count, log_send, update_send_status, delete_send, get_pending_sends
@@ -89,6 +90,22 @@ def check_scan_delay(scan_path: str, delay_hours: int) -> bool:
             f"Scan-to-send delay not met. "
             f"File age: {elapsed_hours:.1f}h, required: {delay_hours}h, "
             f"remaining: {remaining:.1f}h"
+        )
+        return False
+    return True
+
+
+def check_scan_freshness(scan_path: str, max_age_days: int) -> bool:
+    """Reject scan files older than max_age_days. Fail-safe: stale -> don't send."""
+    path = Path(scan_path)
+    mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    now = datetime.now(timezone.utc)
+    age_days = (now - mtime).total_seconds() / 86400
+    if age_days > max_age_days:
+        logger.warning(
+            "SCAN_FILE_STALE — file is %.1f days old (max %d). "
+            "Skipping send run. File: %s",
+            age_days, max_age_days, scan_path,
         )
         return False
     return True
@@ -342,6 +359,11 @@ def run_pipeline(
             "possibly sent on %s, suppressed from re-send",
             p["place_id"], p["email"], p["rmp_token"], p["sent_at"],
         )
+
+    # --- Freshness check (F-07) — always enforced, not skippable ---
+    if not check_scan_freshness(scan_path, MAX_SCAN_FILE_AGE_DAYS):
+        logger.error("Pipeline aborted — scan file too old.")
+        return {"aborted": True, "reason": "scan_file_stale"}
 
     # --- Load and filter ---
     businesses = load_scan(scan_path)
